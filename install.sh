@@ -63,7 +63,7 @@ if [ "$UNINSTALL" = 1 ]; then
   printf '\nRemoving next-workflow from %s\n\n' "$DEST"
   run "rm -rf '$DEST/commands/next' '$DEST/skills/nextjs-app-router' '$DEST/skills/react-component-conventions' '$DEST/skills/code-conventions'"
   run "rm -f '$DEST/agents/'next-*.md '$DEST/next-workflow.version' '$DEST/verify.playwright.config.mjs'"
-  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets verify; do
+  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets verify verify-browser run-tasks; do
     run "rm -f '$DEST/hooks/$h.sh'"
   done
   if [ -f "$DEST/settings.json" ] && command -v jq >/dev/null 2>&1; then

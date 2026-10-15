@@ -535,9 +535,9 @@ group "browser verification is runnable (N3)"
 assert_contains "kit ships a Playwright config with its own testDir" "$(cat "$KIT/.claude/verify.playwright.config.mjs")" ".claude/.cache/verify"
 assert_contains "specs are .mjs (outside the project typecheck)" "$(cat "$KIT/.claude/verify.playwright.config.mjs")" "*.spec.mjs"
 [ -f "$U/.claude/verify.playwright.config.mjs" ] && bad "uninstall removes the verify config" || ok "uninstall removes the verify config"
-assert_contains "verifier uses the kit config" "$(cat "$KIT/.claude/agents/next-verifier.md")" "-c .claude/verify.playwright.config.mjs"
+assert_contains "verifier runs specs through the wrapper" "$(cat "$KIT/.claude/agents/next-verifier.md")" "verify-browser.sh <id>"
 assert_contains "verifier can write its specs" "$(sed -n '1,6p' "$KIT/.claude/agents/next-verifier.md")" "Write"
-assert_contains "running the kit config is pre-approved" "$(cat "$KIT/.claude/settings.json")" "verify.playwright.config.mjs"
+assert_contains "only the wrapper is pre-approved" "$(cat "$KIT/.claude/settings.json")" "Bash(bash .claude/hooks/verify-browser.sh:*)"
 I2="$TMP/i2"; newproj "$I2"; "$KIT/install.sh" "$I2" >/dev/null 2>&1
 [ -f "$I2/.claude/verify.playwright.config.mjs" ] && ok "installer ships the verify config" || bad "installer ships the verify config"
 
@@ -660,6 +660,35 @@ assert_contains "harness aggregates multiple runs" "$(cat "$EV/run.sh")" "pass_r
 assert_contains "harness has a Next 16 + cacheComponents variant" "$(cat "$EV/run.sh")" "cacheComponents: true"
 assert_contains "harness can prove its checks against a reference" "$(cat "$EV/run.sh")" "--reference"
 ls "$EV"/results/*-reference.json >/dev/null 2>&1 && ok "a reference run is on record" || bad "a reference run is on record"
+
+group "security review fixes (allowlist + guard parsing)"
+SETT="$(cat "$KIT/.claude/settings.json")"
+assert_absent "no prefix rule for git diff (--no-index/--output escape the deny rules)" "$SETT" '"Bash(git diff:*)"'
+assert_absent "no prefix rule for git log (--output writes files)" "$SETT" '"Bash(git log:*)"'
+assert_absent "no prefix rule for playwright (-c/--reporter run any file)" "$SETT" '"Bash(npx playwright test'
+assert_eq "a second line can't ride on the .gitignore exemption" "$(sec $'echo x >> .gitignore\ncat .env')" "2"
+assert_eq "command substitution can't ride on it" "$(sec 'echo "$(cat .env)" >> .gitignore')" "2"
+assert_eq "backticks can't ride on it" "$(sec 'echo `cat .env.local` >> .gitignore')" "2"
+assert_eq "plain ignore lines still pass" "$(sec 'echo .env.local >> .gitignore')" "0"
+VB="$TMP/vb"; newproj "$VB"
+O="$(CLAUDE_PROJECT_DIR="$VB" bash "$H/verify-browser.sh" '003 --reporter=/tmp/x.mjs' 2>&1)"; RC=$?
+assert_eq "verify-browser rejects anything but a task id" "$RC" "64"
+O="$(CLAUDE_PROJECT_DIR="$VB" bash "$H/verify-browser.sh" 003 2>&1)"; RC=$?
+assert_contains "verify-browser explains a missing dev URL" "$O" "UNVERIFIED: NEXT_WF_DEV_URL"
+
+group "secrets guard: obfuscation (second security pass)"
+SG="$TMP/sg"; mkdir -p "$SG"
+sg() { (cd "$SG" && CLAUDE_PROJECT_DIR="$SG" sec "$1"); }
+assert_eq "blocks \$(…) hidden in the cp exemption" "$(sg 'cp $(<.env).env.example out')" "2"
+assert_eq "blocks glob .en*" "$(sg 'cat .en*')" "2"
+assert_eq "blocks glob .e[n]v" "$(sg 'cat .e[n]v')" "2"
+assert_eq "blocks quote-split .en''v" "$(sg "cat .en''v")" "2"
+assert_eq "blocks backslash-split .en\\v" "$(sg 'cat .en\v')" "2"
+assert_eq "blocks key globs ~/.ss?/id_*" "$(sg 'cat ~/.ss?/id_*')" "2"
+assert_eq "blocks .* (it expands to .env)" "$(sg 'cat .*')" "2"
+assert_eq "ordinary globs still pass" "$(sg 'ls src/*.ts')" "0"
+assert_eq "test globs still pass" "$(sg 'npx vitest run lib/**/*.test.ts')" "0"
+assert_eq "seeding from the example still passes" "$(sg 'cp .env.example .env.local')" "0"
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

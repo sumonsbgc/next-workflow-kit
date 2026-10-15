@@ -12,15 +12,12 @@
       "Bash(pnpm build:*)",
       "Bash(npx tsc --noEmit:*)",
       "Bash(npx vitest run:*)",
-      "Bash(npx playwright test:*)",
-      "Bash(npx playwright test -c .claude/verify.playwright.config.mjs:*)",
+      "Bash(bash .claude/hooks/verify-browser.sh:*)",
       "Bash(printenv NEXT_WF_DEV_URL)",
       "Bash(npx next build:*)",
       "Bash(bash .claude/hooks/tasks.sh:*)",
       "Bash(bash .claude/hooks/stack.sh)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
+      "Bash(git status)",
       "Bash(node --version)"
     ],
     "deny": [

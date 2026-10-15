@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.1 — 2026-10-15
+Security fixes from the automated commit review of 2.1.0:
+- settings.json: removed prefix rules that granted more than intended. `git diff:*` / `git log:*` (`--no-index`, `--output` read or write files outside the deny rules) are gone, and so is `npx playwright test:*` (`-c`/`--reporter` load any file). `git status` is now exact.
+- Browser specs now run through `.claude/hooks/verify-browser.sh <task-id>`, which takes a validated id and a fixed config; only that script is pre-approved.
+- guard-secrets.sh: the .gitignore and cp exemptions now apply only to plain commands (no newline, `$`, backticks, `;&|<>(){}`, backslashes), checked with bash's regex against the whole command, not grep line by line. Commands are normalized (quotes and backslashes stripped) before matching, and globs are tested against secret file names (`.en*`, `.e[n]v`, `.*`, `~/.ss?/id_*`).
+
 ## 2.1.0 — 2026-10-15
 Fixes every finding from the v2 review (next-workflow-review-v2.pdf, N1–N15).
 - N1  Checkpoints commit only the task's own files; never secrets or pre-existing edits; batches go on an nw/batch-* branch.

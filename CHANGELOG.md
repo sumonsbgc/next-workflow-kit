@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.6 — 2026-10-15
+- guard-secrets: brace expansion (`.{e,x}nv`) and ANSI-C quoting (`$'.e\156v'`, `$'\x2eenv'`) are decoded with bash's own rules (plain-character words only, globbing off, nothing executed) and checked like any other name (automated commit review). Names built at runtime remain the documented limit.
+
 ## 2.1.5 — 2026-10-15
 Security fixes from the automated commit reviews (all reproduced first, then fixed and regression-tested):
 - verify.sh: a tampered `.claude/.cache/stack.env` could inject a command through `CMD_*` values (a redirect passed the old charset and was `eval`d). Commands now use a strict charset (letters, digits, space, `._/:=-`), the cache check rejects any `CMD_` line outside it, and verify.sh refuses to eval one.

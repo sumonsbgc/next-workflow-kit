@@ -722,5 +722,13 @@ assert_absent "a cache that sets PATH is rejected" "$(CLAUDE_PROJECT_DIR="$CK" b
 QC="$TMP/qc"; mkdir -p "$QC"; echo SECRET > "$QC/.env.local"
 assert_eq "quoted cp onto an existing .env.local is blocked" "$(cd "$QC" && CLAUDE_PROJECT_DIR="$QC" sec 'cp .env.example ".env.local"')" "2"
 
+group "secrets guard: brace expansion and ANSI-C quoting"
+assert_eq "blocks brace expansion .{e,x}nv" "$(sec 'cat .{e,x}nv')" "2"
+assert_eq "blocks ANSI-C octal \$'.e\\156v'" "$(sec "cat \$'.e\\156v'")" "2"
+assert_eq "blocks ANSI-C hex \$'\\x2eenv'" "$(sec "cat \$'\\x2eenv'")" "2"
+assert_eq "ordinary brace lists still pass" "$(sec 'ls src/{a,b}.ts')" "0"
+O="$(timeout 5 bash -c "printf '{\"tool_input\":{\"command\":%s}}' \"\$(printf '%s' \"cat \$'a\\\\' \$'b'\" | jq -Rs .)\" | bash '$H/guard-secrets.sh'" >/dev/null 2>&1; echo $?)"
+[ "$O" != 124 ] && ok "odd ANSI-C input can't hang the guard" || bad "odd ANSI-C input can't hang the guard"
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

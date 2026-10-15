@@ -44,6 +44,22 @@ fi
 # Match on a normalized copy: quotes and backslashes removed, so .e""nv, .en\v and '.env' all
 # read as .env, the way the shell will see them.
 NORM="$(tr -d "\"'\\\\" <<<"$CMD")"
+# ANSI-C quoting ($'.e\156v', $'\x2eenv') decodes to a name the text never shows. Decode each
+# $'…' segment with bash itself (no expansion happens inside $'…') and check the result too.
+GUARD_N=0
+while [[ "$CMD" =~ \$\'([^\']*)\' ]] && [ $((GUARD_N+=1)) -le 32 ]; do
+  SEG="${BASH_REMATCH[1]}"; eval "DEC=\$'$SEG'"
+  NORM="$NORM $DEC"; CMD="${CMD/"\$'$SEG'"/ }"
+done
+# Brace expansion (.{e,x}nv → .env): expand words made only of plain characters with bash's own
+# brace/tilde expansion, globbing off, so nothing in them can run, and check every result.
+set -f
+for w in $NORM; do
+  case "$w" in *{*,*}*) ;; *) continue ;; esac
+  [[ "$w" =~ ^[A-Za-z0-9._~/*?{},+@%=-]+$ ]] || { NORM="$NORM .env"; continue; }   # odd chars in a brace word: treat as hostile
+  NORM="$NORM $(eval "printf '%s ' $w")"
+done
+set +f
 HITS=""
 # Globs: block any word whose pattern would expand to a secret file name (.en*, .e[n]v, .*,
 # ~/.ss?/id_*), judged with bash's own pattern matching rather than a regex.

@@ -81,7 +81,7 @@ if [ "$UNINSTALL" = 1 ]; then
   else
     say "settings: remove the next-workflow hook entries from $DEST/settings.json by hand"
   fi
-  say "kept: tasks/, .claude/project-context.md, CLAUDE.md — they are your project's, not the kit's"
+  say "kept: .claude/tasks/ (or a legacy tasks/), .claude/project-context.md, CLAUDE.md — they are your project's, not the kit's"
   exit 0
 fi
 
@@ -148,6 +148,11 @@ if [ "$GLOBAL" = 0 ]; then
     if [ "$DRY" = 0 ]; then printf '\n.claude/.cache/\n' >> "$GI"; fi
     say "gitignore: added .claude/.cache/"
   fi
+fi
+
+# ---- tasks folder (2.3 moved it under .claude) --------------------------------
+if [ "$GLOBAL" = 0 ] && [ -f "$TARGET/tasks/TEMPLATE.md" ] && [ ! -d "$DEST/tasks" ]; then
+  say "tasks:    still in ./tasks (pre-2.3 layout, keeps working) — move it with: bash .claude/hooks/tasks.sh migrate"
 fi
 
 # ---- type-error baseline ------------------------------------------------------

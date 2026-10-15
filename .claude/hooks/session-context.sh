@@ -55,7 +55,8 @@ $CTX_BODY"
 fi
 
 TASKS=""
-if [ -d "$ROOT/tasks" ] && [ -x "$SELF_DIR/tasks.sh" ]; then
+TDIR="$(CLAUDE_PROJECT_DIR="$ROOT" bash "$SELF_DIR/tasks.sh" dir 2>/dev/null)"
+if [ -n "$TDIR" ] && [ -d "$ROOT/$TDIR" ] && [ -x "$SELF_DIR/tasks.sh" ]; then
   TODO="$(CLAUDE_PROJECT_DIR="$ROOT" "$SELF_DIR/tasks.sh" count todo 2>/dev/null || echo 0)"
   DOING="$(CLAUDE_PROJECT_DIR="$ROOT" "$SELF_DIR/tasks.sh" count doing 2>/dev/null || echo 0)"
   BLOCKED="$(CLAUDE_PROJECT_DIR="$ROOT" "$SELF_DIR/tasks.sh" count blocked 2>/dev/null || echo 0)"

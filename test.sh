@@ -204,15 +204,15 @@ group "tasks"
 T="$KIT/.claude/hooks/tasks.sh"
 export CLAUDE_PROJECT_DIR="$P"
 bash "$T" init >/dev/null
-[ -f "$P/tasks/TEMPLATE.md" ] && ok "init creates TEMPLATE.md" || bad "init creates TEMPLATE.md"
+[ -f "$P/.claude/tasks/TEMPLATE.md" ] && ok "init creates TEMPLATE.md" || bad "init creates TEMPLATE.md"
 [ -f "$P/.claude/project-context.md" ] && ok "init creates project-context.md" || bad "init creates project-context.md"
-printf -- '---\nid: 001\ntitle: First\nstatus: done\n---\n' > "$P/tasks/001-a.md"
-printf -- '---\nid: 002\ntitle: Second\nstatus: todo\ndepends: 001\n---\n' > "$P/tasks/002-b.md"
-printf -- '---\nid: 003\ntitle: Third\nstatus: todo\ndepends: 002\n---\n' > "$P/tasks/003-c.md"
-printf 'a plain note, not a task\n' > "$P/tasks/save-for-payment.md"
+printf -- '---\nid: 001\ntitle: First\nstatus: done\n---\n' > "$P/.claude/tasks/001-a.md"
+printf -- '---\nid: 002\ntitle: Second\nstatus: todo\ndepends: 001\n---\n' > "$P/.claude/tasks/002-b.md"
+printf -- '---\nid: 003\ntitle: Third\nstatus: todo\ndepends: 002\n---\n' > "$P/.claude/tasks/003-c.md"
+printf 'a plain note, not a task\n' > "$P/.claude/tasks/save-for-payment.md"
 assert_absent "a note without frontmatter is not a task" "$(bash "$T" list)" "save-for-payment"
 assert_contains "next never picks a note" "$(bash "$T" next)" "002-b.md"
-rm -f "$P/tasks/save-for-payment.md"
+rm -f "$P/.claude/tasks/save-for-payment.md"
 assert_contains "list shows all tasks" "$(bash "$T" list)" "002    todo    Second"
 assert_contains "list marks dependency-blocked tasks" "$(bash "$T" list)" "[blocked by deps]"
 assert_contains "next respects dependencies" "$(bash "$T" next)" "002-b.md"
@@ -227,12 +227,44 @@ assert_contains "next advances after completion" "$(bash "$T" next)" "003-c.md"
 bash "$T" block 003 "waiting on API access" >/dev/null
 assert_contains "block records the reason" "$(bash "$T" show 003)" "blocked: waiting on API access"
 assert_eq "nextid follows the highest id" "$(bash "$T" nextid)" "004"
-printf -- '---\nid: 004\ntitle: Fourth\nstatus: todo\nsize: large\n---\n' > "$P/tasks/004-d.md"
+printf -- '---\nid: 004\ntitle: Fourth\nstatus: todo\nsize: large\n---\n' > "$P/.claude/tasks/004-d.md"
 assert_contains "list flags large tasks" "$(bash "$T" list)" "Fourth [large]"
 bash "$T" close 004 "built the projects page" >/dev/null
 assert_contains "close sets done" "$(bash "$T" show 004)" "status: done"
 assert_contains "close logs the line" "$(bash "$T" show 004)" "- built the projects page"
-rm "$P/tasks/004-d.md"
+rm "$P/.claude/tasks/004-d.md"
+
+# tasks folder location: .claude/tasks by default, legacy ./tasks until migrated
+TD="$TMP/tdir"; mkdir -p "$TD"; printf '{"dependencies":{"next":"16.0.0"}}' > "$TD/package.json"
+assert_eq "default tasks dir" "$(CLAUDE_PROJECT_DIR="$TD" bash "$T" dir)" ".claude/tasks"
+CLAUDE_PROJECT_DIR="$TD" bash "$T" init >/dev/null
+[ -f "$TD/.claude/tasks/TEMPLATE.md" ] && ok "init writes .claude/tasks/TEMPLATE.md" || bad "init writes .claude/tasks/TEMPLATE.md"
+[ -e "$TD/tasks" ] && bad "init leaves no top-level tasks/" || ok "init leaves no top-level tasks/"
+assert_eq "override wins" "$(CLAUDE_PROJECT_DIR="$TD" NEXT_WF_TASKS_DIR=work/plan bash "$T" dir)" "work/plan"
+LG="$TMP/legacy"; mkdir -p "$LG/tasks"; printf '{"dependencies":{"next":"16.0.0"}}' > "$LG/package.json"
+cp "$KIT/templates/task.md" "$LG/tasks/TEMPLATE.md"; printf '/tasks\n' > "$LG/.gitignore"
+printf -- '---\nid: 001\ntitle: Old layout\nstatus: todo\n---\n' > "$LG/tasks/001-old.md"
+assert_eq "legacy ./tasks is still used" "$(CLAUDE_PROJECT_DIR="$LG" bash "$T" dir)" "tasks"
+assert_contains "legacy tasks still list" "$(CLAUDE_PROJECT_DIR="$LG" bash "$T" list)" "Old layout"
+O="$(CLAUDE_PROJECT_DIR="$LG" bash "$T" migrate 2>&1)"
+assert_contains "migrate moves the folder" "$O" "moved ./tasks -> .claude/tasks"
+assert_contains "migrate warns about the /tasks ignore rule" "$O" "will now show up in git"
+[ -f "$LG/.claude/tasks/001-old.md" ] && [ ! -e "$LG/tasks" ] && ok "migrated files are in place" || bad "migrated files are in place"
+assert_contains "tasks list after migrate" "$(CLAUDE_PROJECT_DIR="$LG" bash "$T" list)" "Old layout"
+CLAUDE_PROJECT_DIR="$LG" bash "$T" migrate >/dev/null 2>&1; assert_eq "migrate twice refuses" "$?" "1"
+NT="$TMP/notes"; mkdir -p "$NT/tasks"; printf '{"dependencies":{"next":"16.0.0"}}' > "$NT/package.json"; printf 'my notes\n' > "$NT/tasks/plan.md"
+assert_eq "a user's own ./tasks folder is not taken over" "$(CLAUDE_PROJECT_DIR="$NT" bash "$T" dir)" ".claude/tasks"
+
+# tasks.sh new: drafts written by the helper (Claude Code prompts on every Write/Edit under .claude/)
+NW="$TMP/newtask"; mkdir -p "$NW"; printf '{"dependencies":{"next":"16.0.0"}}' > "$NW/package.json"; touch "$NW/artisan"
+nw() { CLAUDE_PROJECT_DIR="$NW" bash "$T" new "$@" >/dev/null 2>&1; echo $?; }
+assert_eq "new writes a draft" "$(printf -- '---\nid: 001\ntitle: Footer\nstatus: draft\n---\n' | nw 001-add-footer)" "0"
+[ -f "$NW/.claude/tasks/001-add-footer.md" ] && ok "new writes into .claude/tasks" || bad "new writes into .claude/tasks"
+assert_eq "new refuses an existing id" "$(printf -- '---\nid: 001\nstatus: draft\n---\n' | nw 001-dup)" "1"
+assert_eq "new refuses a non-draft" "$(printf -- '---\nid: 002\nstatus: todo\n---\n' | nw 002-x)" "1"
+assert_eq "new refuses a mismatched id" "$(printf -- '---\nid: 003\nstatus: draft\n---\n' | nw 002-x)" "1"
+assert_eq "new refuses a path in the name" "$(printf -- '---\nid: 002\nstatus: draft\n---\n' | nw '002-../../evil')" "1"
+assert_eq "new refuses text without frontmatter" "$(printf 'notes\n' | nw 002-notes)" "1"
 
 # --- 7b. models and command wiring -------------------------------------------
 group "commands"
@@ -313,6 +345,18 @@ assert_eq "blocks reading a private key" "$(sec 'cat ~/.ssh/id_rsa')" "2"
 assert_eq "allows .env.example" "$(sec 'cat .env.example')" "0"
 assert_eq "allows process.env in code" "$(sec 'node -e "console.log(process.env.NODE_ENV)"')" "0"
 assert_eq "allows ordinary commands" "$(sec 'git status && npm run build')" "0"
+
+NL=$'\n'; GP="$TMP/globs"; mkdir -p "$GP/keys" "$GP/src"; touch "$GP/keys/server.pem"
+gsec() { printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$1" | jq -Rs .)" | (cd "$GP" && CLAUDE_PROJECT_DIR="$GP" bash "$H/guard-secrets.sh" >/dev/null 2>&1); echo $?; }
+assert_eq "a */node_modules/* exclude is not a secret" "$(gsec "find . -not -path '*/node_modules/*' -name '*.ts'")" "0"
+assert_eq "ls src/* is allowed" "$(gsec 'ls src/*')" "0"
+assert_eq "dot globs still block (.en*)" "$(gsec 'cat .en*')" "2"
+assert_eq "cat .* still blocks" "$(gsec 'cat .*')" "2"
+assert_eq "a bare * blocks where a key really is" "$(gsec 'cat keys/*')" "2"
+assert_eq "a draft heredoc to tasks.sh new may mention .env" "$(gsec "bash .claude/hooks/tasks.sh new 001-x <<'TASK'${NL}---${NL}never commit .env${NL}TASK")" "0"
+assert_eq "a command after the heredoc still blocks" "$(gsec "bash .claude/hooks/tasks.sh new 001-x <<'TASK'${NL}x${NL}TASK${NL}cat .env")" "2"
+assert_eq "an unquoted heredoc still blocks" "$(gsec "bash .claude/hooks/tasks.sh new 001-x <<TASK${NL}\$(cat .env)${NL}TASK")" "2"
+assert_eq "a heredoc into bash still blocks" "$(gsec "bash <<'TASK'${NL}cat .env${NL}TASK")" "2"
 
 group "guards (M1, M3, L3)"
 G="$TMP/g"; newproj "$G"
@@ -422,7 +466,7 @@ R="$TMP/r"; newproj "$R"
 ( cd "$R" && git init -q && git config user.email t@t && git config user.name t && printf '.claude/.cache/\n' > .gitignore && git add -A && git commit -qm init )
 export CLAUDE_PROJECT_DIR="$R"
 bash "$H/tasks.sh" init >/dev/null
-printf -- '---\nid: 001\ntitle: Add footer\nstatus: draft\nsize: small\n---\n## Acceptance\n- [ ] [review] x\n' > "$R/tasks/001-footer.md"
+printf -- '---\nid: 001\ntitle: Add footer\nstatus: draft\nsize: small\n---\n## Acceptance\n- [ ] [review] x\n' > "$R/.claude/tasks/001-footer.md"
 assert_contains "next skips drafts" "$(bash "$H/tasks.sh" next)" "no runnable task"
 bash "$H/tasks.sh" start 001 >/dev/null 2>&1; RC=$?
 assert_eq "start refuses a draft" "$RC" "1"
@@ -451,7 +495,7 @@ O="$(printf '{"tool_input":{"command":"ls"}}' | bash "$H/bash-guard.sh" 2>&1)"; 
 assert_eq "silent when the command changed nothing" "$RC$O" "0"
 
 group "headless runner (H3)"
-printf -- '---\nid: 002\ntitle: Second\nstatus: draft\n---\n' > "$R/tasks/002-second.md"
+printf -- '---\nid: 002\ntitle: Second\nstatus: draft\n---\n' > "$R/.claude/tasks/002-second.md"
 O="$(bash "$H/run-tasks.sh" --dry-run 2>&1)"
 assert_contains "runner plans the next task in a fresh session" "$O" '/next:task 001 headless'
 O="$(bash "$H/run-tasks.sh" --dry-run 002 2>&1)"
@@ -494,13 +538,13 @@ assert_contains "upgrade never removes a deny rule (kit's)" "$SU" '"Read(./.env.
 assert_contains "upgrade never removes a deny rule (user's)" "$SU" "Read(./secrets/**)"
 assert_eq "kit version is stamped" "$(cat "$U/.claude/next-workflow.version")" "$(cat "$KIT/VERSION")"
 assert_contains "session report shows the version" "$(CLAUDE_PROJECT_DIR="$U" bash "$U/.claude/hooks/session-context.sh")" "next-workflow $(cat "$KIT/VERSION")"
-mkdir -p "$U/tasks"; touch "$U/tasks/keep.md"
+mkdir -p "$U/.claude/tasks"; touch "$U/.claude/tasks/keep.md"
 "$KIT/install.sh" "$U" --uninstall >/dev/null 2>&1
 [ -e "$U/.claude/commands/next" ] && bad "uninstall removes commands" || ok "uninstall removes commands"
 [ -e "$U/.claude/hooks/post-edit.sh" ] && bad "uninstall removes hooks" || ok "uninstall removes hooks"
 assert_absent "uninstall removes kit hook entries" "$(cat "$U/.claude/settings.json")" "post-edit.sh"
 assert_contains "uninstall keeps the user's hooks" "$(cat "$U/.claude/settings.json")" "my-own-hook.sh"
-[ -e "$U/tasks/keep.md" ] && ok "uninstall keeps tasks/" || bad "uninstall keeps tasks/"
+[ -e "$U/.claude/tasks/keep.md" ] && ok "uninstall keeps .claude/tasks/" || bad "uninstall keeps .claude/tasks/"
 
 group "eval harness (M6)"
 O="$(bash "$KIT/evals/run.sh" --dry-run 2>&1)"
@@ -521,7 +565,7 @@ C1="$TMP/c1"; gitproj "$C1"
 export CLAUDE_PROJECT_DIR="$C1"
 bash "$H/tasks.sh" init >/dev/null
 printf 'draft notes\n' > "$C1/notes.txt"                                  # dirty before the task
-printf -- '---\nid: 001\ntitle: Footer\nstatus: todo\n---\n' > "$C1/tasks/001-f.md"
+printf -- '---\nid: 001\ntitle: Footer\nstatus: todo\n---\n' > "$C1/.claude/tasks/001-f.md"
 bash "$H/tasks.sh" start 001 >/dev/null
 printf 'export const F = 1\n' > "$C1/footer.ts"
 O="$(NEXT_WF_CHECKPOINT=commit bash "$H/tasks.sh" close 001 "footer")"
@@ -529,7 +573,7 @@ SHOWN="$(git -C "$C1" show --stat --format= HEAD)"
 assert_contains "checkpoint commits the task's file" "$SHOWN" "footer.ts"
 assert_absent "checkpoint leaves out pre-existing edits" "$SHOWN" "notes.txt"
 assert_absent "checkpoint never commits the kit cache" "$SHOWN" ".claude/.cache"
-printf -- '---\nid: 002\ntitle: Env\nstatus: todo\n---\n' > "$C1/tasks/002-e.md"
+printf -- '---\nid: 002\ntitle: Env\nstatus: todo\n---\n' > "$C1/.claude/tasks/002-e.md"
 bash "$H/tasks.sh" start 002 >/dev/null
 printf 'SECRET=1\n' > "$C1/.env"; printf 'export const G = 1\n' > "$C1/g.ts"
 HEADBEFORE="$(git -C "$C1" rev-parse HEAD)"
@@ -587,8 +631,8 @@ group "undo respects dependencies (N6)"
 D6="$TMP/d6"; gitproj "$D6"
 export CLAUDE_PROJECT_DIR="$D6"
 bash "$H/tasks.sh" init >/dev/null
-printf -- '---\nid: 001\ntitle: Base\nstatus: todo\n---\n' > "$D6/tasks/001-a.md"
-printf -- '---\nid: 002\ntitle: Builds on base\nstatus: todo\ndepends: 001\n---\n' > "$D6/tasks/002-b.md"
+printf -- '---\nid: 001\ntitle: Base\nstatus: todo\n---\n' > "$D6/.claude/tasks/001-a.md"
+printf -- '---\nid: 002\ntitle: Builds on base\nstatus: todo\ndepends: 001\n---\n' > "$D6/.claude/tasks/002-b.md"
 bash "$H/tasks.sh" start 001 >/dev/null; printf 'export const a = 1\n' > "$D6/a.ts"
 NEXT_WF_CHECKPOINT=commit bash "$H/tasks.sh" close 001 "a" >/dev/null
 bash "$H/tasks.sh" start 002 >/dev/null; printf 'import { a } from "./a"\nexport const b = a\n' > "$D6/b.ts"
@@ -603,8 +647,8 @@ assert_contains "dependent is back to todo" "$(bash "$H/tasks.sh" show 002)" "st
 assert_contains "base is back to todo" "$(bash "$H/tasks.sh" show 001)" "status: todo"
 
 group "verifier measured and skipped by rule (N7, N11)"
-printf -- '---\nid: 003\ntitle: Copy tweak\nstatus: todo\n---\n## Acceptance\n- [ ] [review] Heading says Projects\n\n## Notes\n' > "$D6/tasks/003-c.md"
-printf -- '---\nid: 004\ntitle: Has a test\nstatus: todo\n---\n## Acceptance\n- [ ] [test] Validates input\n' > "$D6/tasks/004-d.md"
+printf -- '---\nid: 003\ntitle: Copy tweak\nstatus: todo\n---\n## Acceptance\n- [ ] [review] Heading says Projects\n\n## Notes\n' > "$D6/.claude/tasks/003-c.md"
+printf -- '---\nid: 004\ntitle: Has a test\nstatus: todo\n---\n## Acceptance\n- [ ] [test] Validates input\n' > "$D6/.claude/tasks/004-d.md"
 bash "$H/tasks.sh" start 003 >/dev/null; printf 'export const h = "Projects"\n' > "$D6/h.ts"
 assert_contains "a tiny all-[review] task may skip the verifier" "$(bash "$H/tasks.sh" can-skip-verify 003)" "yes"
 bash "$H/tasks.sh" start 004 >/dev/null
@@ -625,7 +669,7 @@ group "in-session batches are measured (N15)"
 assert_contains "task starts record where they came from" "$(cat "$D6/.claude/.cache/metrics.jsonl")" '"via":"session"'
 O="$(NEXT_WF_RUNNER=1 bash "$H/tasks.sh" start 003 2>&1)"
 assert_contains "runner starts are tagged" "$(tail -1 "$D6/.claude/.cache/metrics.jsonl")" '"via":"runner"'
-printf -- '---\nid: 005\ntitle: Five\nstatus: todo\n---\n' > "$D6/tasks/005-e.md"
+printf -- '---\nid: 005\ntitle: Five\nstatus: todo\n---\n' > "$D6/.claude/tasks/005-e.md"
 bash "$H/tasks.sh" start 001 >/dev/null 2>&1; bash "$H/tasks.sh" start 002 >/dev/null 2>&1
 O="$(bash "$H/tasks.sh" start 005 2>&1)"
 assert_contains "the 4th+ in-session start within 3h gets a nudge" "$O" "run-tasks.sh"
@@ -649,8 +693,8 @@ assert_absent "global install doesn't point at project-local helpers" "$GS" "Bas
 GP="$TMP/gp"; gitproj "$GP"
 export CLAUDE_PROJECT_DIR="$GP"
 bash "$GH/.claude/hooks/tasks.sh" init >/dev/null 2>&1
-[ -f "$GP/tasks/TEMPLATE.md" ] && ok "global helpers scaffold a project" || bad "global helpers scaffold a project"
-printf -- '---\nid: 001\ntitle: G\nstatus: todo\n---\n' > "$GP/tasks/001-g.md"
+[ -f "$GP/.claude/tasks/TEMPLATE.md" ] && ok "global helpers scaffold a project" || bad "global helpers scaffold a project"
+printf -- '---\nid: 001\ntitle: G\nstatus: todo\n---\n' > "$GP/.claude/tasks/001-g.md"
 bash "$GH/.claude/hooks/tasks.sh" start 001 >/dev/null; printf 'export const g = 1\n' > "$GP/g.ts"
 O="$(NEXT_WF_CHECKPOINT=commit bash "$GH/.claude/hooks/tasks.sh" close 001 g)"
 assert_contains "a full task cycle works from a global install" "$O" "checkpoint:"
@@ -710,7 +754,7 @@ printf 'NEXT_VERSION="15.1.0"\nCMD_TYPECHECK="true > %s/pwned"\n' "$CI" > "$CI/.
 printf '{"stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$CI" bash "$H/verify.sh" >/dev/null 2>&1
 [ -e "$CI/pwned" ] && bad "a tampered cached command is never executed" || ok "a tampered cached command is never executed"
 assert_absent "commands are written in the strict charset" "$(CLAUDE_PROJECT_DIR="$P" NEXT_WF_NO_CACHE=1 bash "$H/stack.sh" | grep '^CMD_')" "|"
-SD2="$TMP/sd2"; mkdir -p "$SD2/tasks"; ( cd "$SD2" && git init -q && git config user.email t@t && git config user.name t && echo "SECRET=old" > .env && printf -- '---\nid: 001\ntitle: x\nstatus: todo\n---\n' > tasks/001-x.md && git add -A && git commit -qm i )
+SD2="$TMP/sd2"; mkdir -p "$SD2/.claude/tasks"; ( cd "$SD2" && git init -q && git config user.email t@t && git config user.name t && echo "SECRET=old" > .env && printf -- '---\nid: 001\ntitle: x\nstatus: todo\n---\n' > .claude/tasks/001-x.md && git add -A && git commit -qm i )
 CLAUDE_PROJECT_DIR="$SD2" bash "$H/tasks.sh" start 001 >/dev/null; echo "SECRET=new-value" > "$SD2/.env"
 O="$(CLAUDE_PROJECT_DIR="$SD2" bash "$H/tasks.sh" diff 001)"
 assert_absent "task diff never prints a secret file's content" "$O" "new-value"
@@ -772,8 +816,8 @@ printf 'export function Card() { return null }\n' > "$MP/components/card.tsx"
 assert_contains "map regenerates when files change" "$(CLAUDE_PROJECT_DIR="$MP" bash "$H/repo-map.sh")" "card.tsx: Card"
 CX="$TMP/cx"; newproj "$CX"; ( cd "$CX" && git init -q && git config user.email t@t && git config user.name t && printf '.claude/.cache/\n' > .gitignore && git add -A && git commit -qm i )
 export CLAUDE_PROJECT_DIR="$CX"; bash "$H/tasks.sh" init >/dev/null
-printf -- '---\nid: 001\ntitle: Base\nstatus: todo\n---\n' > "$CX/tasks/001-a.md"
-printf -- '---\nid: 002\ntitle: Next\nstatus: todo\ndepends: 001\n---\n' > "$CX/tasks/002-b.md"
+printf -- '---\nid: 001\ntitle: Base\nstatus: todo\n---\n' > "$CX/.claude/tasks/001-a.md"
+printf -- '---\nid: 002\ntitle: Next\nstatus: todo\ndepends: 001\n---\n' > "$CX/.claude/tasks/002-b.md"
 bash "$H/tasks.sh" start 001 >/dev/null; printf 'export const svc = 1\n' > "$CX/svc.ts"; bash "$H/tasks.sh" close 001 "added svc helper" >/dev/null
 O="$(bash "$H/tasks.sh" context 002)"
 assert_contains "context includes the dependency's log line" "$O" "added svc helper"

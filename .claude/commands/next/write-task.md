@@ -1,5 +1,5 @@
 ---
-description: Turn a request into one or more task files in tasks/ — goal, acceptance, size, dependencies. Plans only; never implements.
+description: Turn a request into one or more task files in .claude/tasks/ — goal, acceptance, size, dependencies. Plans only; never implements.
 argument-hint: <what you want built, in plain words>
 model: opus
 allowed-tools: Read, Write, Grep, Glob, Bash
@@ -11,7 +11,7 @@ You are the planner. A cheaper model will implement each task you write, startin
 
 **Do not write or edit any source file.** Your only output is task files.
 
-`T=<Kit helpers>/tasks.sh`, using the **Kit helpers** path from the session report (`.claude/hooks`, or `~/.claude/hooks` on a global install). If `tasks/` does not exist, run `bash $T init` first.
+`T=<Kit helpers>/tasks.sh`, using the **Kit helpers** path from the session report (`.claude/hooks`, or `~/.claude/hooks` on a global install). If the tasks folder does not exist, run `bash $T init` first.
 
 ## 1. Understand — cheaply
 
@@ -42,7 +42,7 @@ Don't over-split: a page together with its own loading/error states and the one 
 
 ## 5. Write the files
 
-For each task: `id="$(bash $T nextid)"`, then write `tasks/<id>-<kebab-title>.md` in exactly the shape of `tasks/TEMPLATE.md`:
+For each task: `id="$(bash $T nextid)"`, then create it with `bash $T new <id>-<kebab-title> <<'TASK'` … `TASK` — the whole file on stdin, in exactly the shape of `<dir>/TEMPLATE.md` (`<dir>` is what `bash $T dir` prints, `.claude/tasks` unless overridden). Don't use the Write tool for new task files: the folder is under `.claude/`, where Claude Code asks the user to approve every Write/Edit; `new` writes it without a prompt and refuses anything that isn't a well-formed draft. To revise a draft the user commented on, Edit is fine.
 
 ```
 ---
@@ -67,13 +67,13 @@ size: small | large
   Example: `- [ ] [test] Archiving a project the user doesn't own returns an error and changes nothing`
 - **Notes** — decisions you made, constraints, where things should live if the context file doesn't already say, and an explicit **Out of scope** line.
 
-Write the next file only after the previous one exists, so `nextid` advances. Every task is written as `status: draft` — nothing runs until the user has read it and approved it.
+Create the next task only after `new` succeeded for the previous one, so `nextid` advances. Every task is written as `status: draft` — nothing runs until the user has read it and approved it.
 
 ## Report
 
 A short table — id, title, size, depends — then the next steps, exactly:
 
-1. Read the drafts in `tasks/` and edit anything you disagree with.
+1. Read the drafts in `.claude/tasks/` and edit anything you disagree with.
 2. `bash .claude/hooks/tasks.sh approve all` (or `approve <id>`).
 3. `/next:task` for one at a time, or `bash .claude/hooks/run-tasks.sh --checkpoint` for a batch with fresh context per task.
 

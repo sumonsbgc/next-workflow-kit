@@ -22,6 +22,17 @@ else
 fi
 [ -n "$CMD" ] || exit 0
 
+# A draft task written through the helper (`tasks.sh new <id>-<name> <<'TASK'` … `TASK`): the body is
+# quoted heredoc text — never expanded, never run — and only tasks.sh reads it, so words like
+# ".env" in a task's prose are not file accesses. Only this exact shape: one command line, a quoted
+# delimiter, and nothing after the closing delimiter.
+TQ="'"; FIRST="${CMD%%$'\n'*}"
+if [[ "$FIRST" =~ ^[[:space:]]*bash[[:space:]]+(~/|\./)?\.claude/hooks/tasks\.sh[[:space:]]+new[[:space:]]+[0-9]{3,}-[a-z0-9-]+[[:space:]]+\<\<[[:space:]]*($TQ([A-Za-z_]+)$TQ|\"([A-Za-z_]+)\")[[:space:]]*$ ]]; then
+  TAG="${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
+  BODY="${CMD#*$'\n'}"; BODY="${BODY%"${BODY##*[![:space:]]}"}"   # drop trailing blank lines
+  if [ "$BODY" != "$CMD" ] && [ "${BODY##*$'\n'}" = "$TAG" ] && [ "$(grep -cxF -- "$TAG" <<<"$BODY")" = 1 ]; then exit 0; fi
+fi
+
 # Writing an ignore rule names .env without reading it. Matched against the WHOLE command
 # with bash's own regex (never line-by-line grep: a second line would ride along), and only
 # for plain literal words: no $, backticks, quotes-with-substitution, redirects in, or newlines.
@@ -109,6 +120,18 @@ for w in $NORM; do
   case "$w" in *'*'*|*'?'*|*'['*) ;; *) continue ;; esac
   b="${w##*/}"
   for cand in .env .env.local .env.production .env.development id_rsa id_ed25519 id_ecdsa server.pem; do
+    # Shell globs never match a leading dot unless the pattern starts with one (dotglob is off),
+    # so `*` or `*/node_modules/*` cannot reach .env; only `.e*`-style patterns can.
+    case "$cand" in .*) [[ "$b" == .* ]] || continue ;; esac
+    # A bare wildcard (`*`, `*.*`) is just "all files": it reaches a key only if one is really
+    # there, so ask the filesystem (globbing the directory part too) instead of blocking `ls *`.
+    if [[ "$cand" != .* ]] && [[ "$b" =~ ^[*?.]+$ ]]; then
+      d="${w%/*}"; [ "$d" = "$w" ] && d="."; d="${d/#\~/$HOME}"
+      case "$d" in /*) ;; *) d="${CLAUDE_PROJECT_DIR:-$PWD}/$d" ;; esac
+      # shellcheck disable=SC2053
+      [[ "$cand" == $b ]] && compgen -G "$d/$cand" >/dev/null 2>&1 && { HITS="$HITS $w"; break; }
+      continue
+    fi
     # shellcheck disable=SC2053  # $b is meant to be a pattern here
     [[ "$cand" == $b ]] && { HITS="$HITS $w"; break; }
   done

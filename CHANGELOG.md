@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.0 — 2026-10-15
+- Task files live in `.claude/tasks/` instead of `./tasks/`, beside the rest of the kit's project state. `tasks.sh init` scaffolds it there, and `tasks.sh dir` prints the folder in use; `/next:write-task` asks it. `NEXT_WF_TASKS_DIR` still overrides.
+- Existing projects keep working: when `.claude/tasks` doesn't exist and `./tasks` holds the kit's `TEMPLATE.md`, the helpers keep using `./tasks`. `tasks.sh migrate` moves it (and warns if `.gitignore` ignores `/tasks`); the installer says so. A user's own `./tasks` folder of notes is never taken over.
+- Task diffs, dirty-file snapshots and the skip-verify size check exclude whichever tasks folder is in use, not a hardcoded `tasks`.
+- `tasks.sh new <id>-<kebab-title>` writes a draft task from stdin, and `/next:write-task` uses it. Claude Code asks the user to approve every Write/Edit under `.claude/`, and settings allow-rules can't pre-approve those writes (docs: permission modes, "Protected paths"), so writing drafts with the Write tool would mean one prompt per task. `new` accepts only a well-formed draft: a `<id>-<kebab>` name with no path, frontmatter whose `id` matches, `status: draft`, and an id that doesn't exist yet.
+- guard-secrets: a quoted heredoc sent to `tasks.sh new` passes even when the task text mentions `.env` (exact shape only; heredocs into `bash`/`cat`, unquoted heredocs and anything after the closing delimiter are still checked).
+- guard-secrets: globs no longer false-positive. `*` can't match a leading dot, so `-not -path '*/node_modules/*'` and `ls src/*` pass; `.e*`-style patterns still block. A bare `*` blocks only where a key file actually exists (`cat keys/*`).
+- The session report counts tasks in the folder actually in use (it was still looking at `./tasks`).
+
 ## 2.2.1 — 2026-10-15
 - tasks.sh: only files that start with YAML frontmatter are tasks. Before, a plain note in `tasks/` (found in a real project) counted as an approved `todo` task, and `/next:task` would have started building from it. The Laravel kit already had this rule.
 

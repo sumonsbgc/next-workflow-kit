@@ -53,7 +53,7 @@ setup_app() { # setup_app <dir>
   fi
   (cd "$W" && git init -q && git config user.email eval@local && git config user.name eval && git add -A && git commit -qm fixture)
   "$KIT/install.sh" "$W" >/dev/null 2>&1 || { echo "kit install failed" >&2; return 1; }
-  mkdir -p "$W/tasks" && cp "$EVALS"/tasks/*.md "$W/tasks/"
+  mkdir -p "$W/.claude/tasks" && cp "$EVALS"/tasks/*.md "$W/.claude/tasks/"
   (cd "$W" && git add -A && git commit -qm "kit + tasks")
 }
 
@@ -75,8 +75,8 @@ for r in $(seq 1 "$RUNS"); do
   if [ "$REF" = 1 ]; then
     # Stand in for a perfect agent: the reference solution, and the statuses it would leave.
     cp -R "$EVALS/reference/." "$W/"
-    for t in "$W"/tasks/00[1-4]-*.md; do sed -i.bak -E 's/^status:.*/status: done/' "$t" && rm -f "$t.bak"; done
-    sed -i.bak -E 's/^status:.*/status: blocked/' "$W"/tasks/005-*.md && rm -f "$W"/tasks/005-*.md.bak
+    for t in "$W"/.claude/tasks/00[1-4]-*.md; do sed -i.bak -E 's/^status:.*/status: done/' "$t" && rm -f "$t.bak"; done
+    sed -i.bak -E 's/^status:.*/status: blocked/' "$W"/.claude/tasks/005-*.md && rm -f "$W"/.claude/tasks/005-*.md.bak
   else
     (cd "$W" && CLAUDE_PROJECT_DIR="$W" "${RUNNER[@]}")
   fi
@@ -91,7 +91,7 @@ for r in $(seq 1 "$RUNS"); do
   TASKS="[]"
   for c in "$EVALS"/checks/*.sh; do
     ID="$(basename "$c" .sh)"
-    ST="$(sed -n '2,/^---/p' "$W"/tasks/"$ID"-*.md 2>/dev/null | sed -nE 's/^status:[[:space:]]*([a-z]+).*/\1/p' | head -1)"
+    ST="$(sed -n '2,/^---/p' "$W"/.claude/tasks/"$ID"-*.md 2>/dev/null | sed -nE 's/^status:[[:space:]]*([a-z]+).*/\1/p' | head -1)"
     if [ "$SERVED" = 1 ] || [ "$ID" = 005 ] || [ "$ID" = 002 ]; then
       WHY="$(cd "$W" && BASE_URL="http://127.0.0.1:$PORT" STATUS="$ST" bash "$c" 2>&1)"; RC=$?
     else WHY="app did not build or start"; RC=1; fi

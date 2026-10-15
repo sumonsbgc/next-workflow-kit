@@ -2,7 +2,10 @@
 # Task-file helper for the next-workflow task runner.
 # Deterministic bookkeeping so the model never reads a task file it isn't working on.
 #
-#   tasks.sh init                 scaffold tasks/ from the templates
+#   tasks.sh init                 scaffold the tasks folder (.claude/tasks) from the templates
+#   tasks.sh new <id>-<slug>      write a draft task from stdin (no .claude/ write prompt)
+#   tasks.sh dir                  print the tasks folder, relative to the project
+#   tasks.sh migrate              move a pre-2.3 ./tasks folder to .claude/tasks
 #   tasks.sh list [status]        one line per task: id, status, title [size]
 #   tasks.sh next                 path of the first runnable task (todo, deps done)
 #   tasks.sh nextid               the next free id, zero-padded (for /next:write-task)
@@ -26,11 +29,22 @@
 #   tasks.sh stats                cost/time/guard summary from .claude/.cache/metrics.jsonl
 #
 # Statuses: draft -> todo -> doing -> done | blocked.
-# Tasks live in ./tasks (override with NEXT_WF_TASKS_DIR).
+# A task is a .md file whose FIRST LINE is `---` (YAML frontmatter). Plans, notes and scratch
+# files that happen to live in the tasks folder are ignored, not run.
+# Tasks live in .claude/tasks (override with NEXT_WF_TASKS_DIR, relative to the project).
+# A project still on the pre-2.3 layout — ./tasks with the kit's TEMPLATE.md and no
+# .claude/tasks — keeps working from ./tasks until `tasks.sh migrate` moves it.
 set -uo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-DIR="$ROOT/${NEXT_WF_TASKS_DIR:-tasks}"
+if [ -n "${NEXT_WF_TASKS_DIR:-}" ]; then
+  DIR="$ROOT/${NEXT_WF_TASKS_DIR%/}"
+elif [ ! -d "$ROOT/.claude/tasks" ] && [ -f "$ROOT/tasks/TEMPLATE.md" ]; then
+  DIR="$ROOT/tasks"
+else
+  DIR="$ROOT/.claude/tasks"
+fi
+TASKS_REL="${DIR#"$ROOT"/}"   # for git pathspecs: task files are bookkeeping, not the task's change
 STATE="$ROOT/.claude/.cache/tasks"
 # shellcheck source=_lib.sh
 . "$SELF_DIR/_lib.sh"
@@ -113,8 +127,8 @@ wt_hash() { [ -f "$ROOT/$1" ] && git -C "$ROOT" hash-object -- "$1" 2>/dev/null 
 task_paths() { # task_paths <id>
   local base p h was
   base="$(state_get "$1" base)"; [ -n "$base" ] && [ "$base" != none ] || base="HEAD"
-  { git -C "$ROOT" diff --name-only "$base" -- . ':!tasks'
-    git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks'; } | sort -u |
+  { git -C "$ROOT" diff --name-only "$base" -- . ":!$TASKS_REL"
+    git -C "$ROOT" ls-files --others --exclude-standard -- . ":!$TASKS_REL"; } | sort -u |
   while IFS= read -r p; do
     [ -n "$p" ] || continue
     was="$( [ -f "$STATE/$1.dirty" ] && awk -v p="$p" '{h=$1; $1=""; sub(/^ /,""); if ($0==p) print h}' "$STATE/$1.dirty" | head -1)"
@@ -162,8 +176,38 @@ case "$CMD" in
     [ -f "$DIR/TEMPLATE.md" ] || { [ -f "$TPL/task.md" ]         && cp "$TPL/task.md" "$DIR/TEMPLATE.md"; }
     CTX="$ROOT/.claude/project-context.md"
     [ -f "$CTX" ] || { [ -f "$TPL/project-context.md" ] && mkdir -p "$ROOT/.claude" && cp "$TPL/project-context.md" "$CTX"; }
-    echo "tasks/ ready: $DIR (README.md, TEMPLATE.md)"
+    echo "tasks ready: $TASKS_REL/ (README.md, TEMPLATE.md)"
     [ -f "$CTX" ] && echo "context: .claude/project-context.md"
+    ;;
+
+  dir) echo "$TASKS_REL" ;;
+
+  new) # new <id>-<kebab-title>, task text on stdin: writes a DRAFT task file. Claude Code
+       # prompts on every Write/Edit under .claude/, so planners write drafts through here.
+    NAME="${1:?usage: tasks.sh new <id>-<kebab-title> < task.md}"
+    [[ "$NAME" =~ ^([0-9]{3,})-[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "bad name '$NAME' — want <id>-<kebab-title>, e.g. 004-add-footer"
+    NID="${BASH_REMATCH[1]}"
+    [ -z "$(find_task "$NID" 2>/dev/null)" ] || die "task $NID already exists — run: tasks.sh nextid"
+    BODY="$(head -c 200000)"
+    [ "$(printf '%s\n' "$BODY" | head -n1 | tr -d '[:space:]')" = "---" ] || die "the task must start with a --- frontmatter line"
+    FM="$(printf '%s\n' "$BODY" | sed -n '2,/^---[[:space:]]*$/p')"
+    printf '%s\n' "$FM" | grep -qE "^id:[[:space:]]*['\"]?$NID['\"]?[[:space:]]*$" || die "frontmatter id must be $NID"
+    printf '%s\n' "$FM" | grep -qE '^status:[[:space:]]*draft[[:space:]]*$' || die "new tasks are drafts: set status: draft"
+    mkdir -p "$DIR" || die "cannot create $TASKS_REL"
+    OUT="$DIR/$NAME.md"
+    printf '%s\n' "$BODY" > "$OUT.tmp.$$" && mv "$OUT.tmp.$$" "$OUT" || { rm -f "$OUT.tmp.$$"; die "could not write $OUT"; }
+    echo "wrote $TASKS_REL/$NAME.md (draft)"
+    ;;
+
+  migrate)
+    [ -z "${NEXT_WF_TASKS_DIR:-}" ] || die "NEXT_WF_TASKS_DIR is set ($NEXT_WF_TASKS_DIR) — unset it to use .claude/tasks"
+    [ -d "$ROOT/.claude/tasks" ] && die "already on .claude/tasks — nothing to move"
+    [ -d "$ROOT/tasks" ] || die "no ./tasks folder to move"
+    mkdir -p "$ROOT/.claude" && mv "$ROOT/tasks" "$ROOT/.claude/tasks" || die "could not move ./tasks"
+    echo "moved ./tasks -> .claude/tasks"
+    if [ -f "$ROOT/.gitignore" ] && grep -qxE '/?tasks/?' "$ROOT/.gitignore"; then
+      echo "note: .gitignore ignores /tasks; .claude/tasks is not ignored, so task files will now show up in git"
+    fi
     ;;
 
   list)
@@ -259,8 +303,8 @@ case "$CMD" in
       BASE="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo none)"
       # Remember what was already dirty, so the checkpoint can leave it out.
       : > "$STATE/$1.dirty"
-      { git -C "$ROOT" diff --name-only HEAD -- . ':!tasks'
-        git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks'; } 2>/dev/null | sort -u |
+      { git -C "$ROOT" diff --name-only HEAD -- . ":!$TASKS_REL"
+        git -C "$ROOT" ls-files --others --exclude-standard -- . ":!$TASKS_REL"; } 2>/dev/null | sort -u |
         while IFS= read -r p; do [ -n "$p" ] && printf '%s %s\n' "$(wt_hash "$p")" "$p"; done >> "$STATE/$1.dirty"
     fi
     printf 'base=%s\nstarted=%s\n' "$BASE" "$(date +%s)" > "$STATE/$1.env"
@@ -283,10 +327,10 @@ case "$CMD" in
     # the Read deny rules. Their names are listed so nobody thinks they were untouched.
     SECRET_PS=(":(exclude,glob)**/.env" ":(exclude,glob)**/.env.*" ":(exclude,glob)**/*.pem" ":(exclude,glob)**/*.key"
                ":(exclude,glob)**/auth.json" ":(exclude,glob)**/id_rsa*" ":(exclude,glob)**/id_ed25519*" ":(exclude,glob)**/id_ecdsa*")
-    git -C "$ROOT" diff "$BASE" -- . ':!tasks' "${SECRET_PS[@]}"
-    UNTRACKED="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks' "${SECRET_PS[@]}")"
+    git -C "$ROOT" diff "$BASE" -- . ":!$TASKS_REL" "${SECRET_PS[@]}"
+    UNTRACKED="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ":!$TASKS_REL" "${SECRET_PS[@]}")"
     [ -n "$UNTRACKED" ] && printf '\n# new files (untracked):\n%s\n' "$UNTRACKED"
-    HIDDEN="$({ git -C "$ROOT" diff --name-only "$BASE" -- . ':!tasks'; git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks'; } |
+    HIDDEN="$({ git -C "$ROOT" diff --name-only "$BASE" -- . ":!$TASKS_REL"; git -C "$ROOT" ls-files --others --exclude-standard -- . ":!$TASKS_REL"; } |
               while IFS= read -r p; do [ -n "$p" ] && is_secret_path "$p" && printf '%s\n' "$p"; done | sort -u)"
     [ -n "$HIDDEN" ] && printf '\n# secret files changed (content not shown): %s\n' "$(tr '\n' ' ' <<<"$HIDDEN")"
     exit 0 ;;
@@ -367,9 +411,9 @@ case "$CMD" in
     grep -qvE '\[review\]' <<<"$CRIT" && { echo "no: has [test]/[browser]/untagged criteria"; exit 1; }
     in_git || { echo "no: no git, so the diff size can't be measured"; exit 1; }
     BASE="$(state_get "$1" base)"; [ -n "$BASE" ] && [ "$BASE" != none ] || BASE="HEAD"
-    # Size of the task's own change: kit bookkeeping (.claude/, tasks/) doesn't count.
-    LINES="$(git -C "$ROOT" diff --numstat "$BASE" -- . ':!tasks' ':!.claude' | awk '{a+=$1+$2} END{print a+0}')"
-    NEW="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks' ':!.claude' | while IFS= read -r p; do wc -l < "$ROOT/$p"; done | awk '{a+=$1} END{print a+0}')"
+    # Size of the task's own change: kit bookkeeping (.claude/, the tasks folder) doesn't count.
+    LINES="$(git -C "$ROOT" diff --numstat "$BASE" -- . ":!$TASKS_REL" ':!.claude' | awk '{a+=$1+$2} END{print a+0}')"
+    NEW="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ":!$TASKS_REL" ':!.claude' | while IFS= read -r p; do wc -l < "$ROOT/$p"; done | awk '{a+=$1} END{print a+0}')"
     T=$((LINES + NEW))
     [ "$T" -le 20 ] || { echo "no: diff is $T lines (> 20)"; exit 1; }
     echo "yes: all criteria [review], diff $T lines" ;;

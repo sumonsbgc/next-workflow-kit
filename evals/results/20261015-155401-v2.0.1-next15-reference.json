@@ -1,0 +1,82 @@
+{
+  "version": "2.0.1",
+  "next": "15",
+  "summary": {
+    "runs": 1,
+    "tasks": 5,
+    "pass_rate_mean": 1,
+    "pass_rate_sd": 0,
+    "per_task": [
+      {
+        "id": "001",
+        "passed": 1,
+        "of": 1
+      },
+      {
+        "id": "002",
+        "passed": 1,
+        "of": 1
+      },
+      {
+        "id": "003",
+        "passed": 1,
+        "of": 1
+      },
+      {
+        "id": "004",
+        "passed": 1,
+        "of": 1
+      },
+      {
+        "id": "005",
+        "passed": 1,
+        "of": 1
+      }
+    ],
+    "build_pass": 1,
+    "cost_mean": 0,
+    "seconds_mean": 0,
+    "verifier_first_pass_mean": null
+  },
+  "runs": [
+    {
+      "tasks": [
+        {
+          "id": "001",
+          "status": "done",
+          "pass": true,
+          "detail": "ok"
+        },
+        {
+          "id": "002",
+          "status": "done",
+          "pass": true,
+          "detail": "ok"
+        },
+        {
+          "id": "003",
+          "status": "done",
+          "pass": true,
+          "detail": "ok"
+        },
+        {
+          "id": "004",
+          "status": "done",
+          "pass": true,
+          "detail": "ok"
+        },
+        {
+          "id": "005",
+          "status": "blocked",
+          "pass": true,
+          "detail": "ok"
+        }
+      ],
+      "build": "pass",
+      "typecheck": "pass",
+      "cost_usd": 0,
+      "seconds": 0,
+      "verifier_first_pass": null
+    }
+  ]
+}

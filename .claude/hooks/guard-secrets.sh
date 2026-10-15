@@ -46,20 +46,36 @@ fi
 NORM="$(tr -d "\"'\\\\" <<<"$CMD")"
 # ANSI-C quoting ($'.e\156v', $'\x2eenv') decodes to a name the text never shows. Decode each
 # $'…' segment with bash itself (no expansion happens inside $'…') and check the result too.
-GUARD_N=0
-while [[ "$CMD" =~ \$\'([^\']*)\' ]] && [ $((GUARD_N+=1)) -le 32 ]; do
-  SEG="${BASH_REMATCH[1]}"; eval "DEC=\$'$SEG'"
-  NORM="$NORM $DEC"; CMD="${CMD/"\$'$SEG'"/ }"
+# Fail CLOSED: anything this can't decode with certainty is treated as a secret reference.
+UNSURE=0; GUARD_N=0; REST="$CMD"
+while [[ "$REST" =~ \$\'([^\']*)\' ]]; do
+  GUARD_N=$((GUARD_N+1)); [ "$GUARD_N" -gt 32 ] && { UNSURE=1; break; }
+  SEG="${BASH_REMATCH[1]}"
+  if DEC="$(eval "printf '%s' \$'$SEG'" 2>/dev/null)"; then NORM="$NORM $DEC"; else UNSURE=1; break; fi
+  BEFORE="$REST"; REST="${REST/"\$'$SEG'"/ }"
+  [ "$REST" = "$BEFORE" ] && { UNSURE=1; break; }   # no progress: never loop, never pass
 done
+# An unterminated $' is also undecidable.
+[ "$UNSURE" = 0 ] && [[ "$REST" == *"\$'"* ]] && UNSURE=1
 # Brace expansion (.{e,x}nv → .env): expand words made only of plain characters with bash's own
-# brace/tilde expansion, globbing off, so nothing in them can run, and check every result.
+# brace/tilde expansion, globbing off, so nothing in them can run; anything else with braces is unsure.
 set -f
 for w in $NORM; do
-  case "$w" in *{*,*}*) ;; *) continue ;; esac
-  [[ "$w" =~ ^[A-Za-z0-9._~/*?{},+@%=-]+$ ]] || { NORM="$NORM .env"; continue; }   # odd chars in a brace word: treat as hostile
-  NORM="$NORM $(eval "printf '%s ' $w")"
+  # Only real brace lists expand ({a,b} / {1..3}); {x} or code like map({id}) is left alone.
+  [[ "$w" =~ \{[^{}]*(,|\.\.)[^{}]*\} ]] || continue
+  # Expand just the brace-list part and the plain characters touching it: in `$(echo .{e,x}nv)`
+  # that is `.{e,x}nv`, whatever punctuation surrounds it.
+  [[ "$w" =~ [A-Za-z0-9._~/*?+@%=-]*\{[^{}]*\}[A-Za-z0-9._~/*?+@%=-]* ]] && w="${BASH_REMATCH[0]}"
+  if [[ "$w" =~ ^[A-Za-z0-9._~/*?{},+@%=-]+$ ]] && X="$(eval "printf '%s ' $w" 2>/dev/null)"; then
+    NORM="$NORM $X"
+  else
+    # Can't expand it safely: unsure only if its letters could still spell a secret name.
+    L="$(printf '%s' "$w" | tr -d '{},.' | tr 'A-Z' 'a-z')"
+    [[ "$L" =~ (env|pem|key|auth|id_) ]] && UNSURE=1
+  fi
 done
 set +f
+[ "$UNSURE" = 1 ] && NORM="$NORM .env"   # undecidable quoting/expansion: block
 HITS=""
 # Globs: block any word whose pattern would expand to a secret file name (.en*, .e[n]v, .*,
 # ~/.ss?/id_*), judged with bash's own pattern matching rather than a regex.

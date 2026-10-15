@@ -730,5 +730,14 @@ assert_eq "ordinary brace lists still pass" "$(sec 'ls src/{a,b}.ts')" "0"
 O="$(timeout 5 bash -c "printf '{\"tool_input\":{\"command\":%s}}' \"\$(printf '%s' \"cat \$'a\\\\' \$'b'\" | jq -Rs .)\" | bash '$H/guard-secrets.sh'" >/dev/null 2>&1; echo $?)"
 [ "$O" != 124 ] && ok "odd ANSI-C input can't hang the guard" || bad "odd ANSI-C input can't hang the guard"
 
+group "secrets guard: fails closed, without over-blocking"
+PAD="$(printf "\$'a' %.0s" $(seq 1 40))"
+assert_eq "40 decoy \$'…' segments can't push a secret past the cap" "$(sec "echo $PAD; cat \$'.e\\156v'")" "2"
+assert_eq "an unterminated \$' is blocked" "$(sec "cat \$'abc\\")" "2"
+assert_eq "brace list inside a subshell is expanded" "$(sec 'cat $(echo .{e,x}nv)')" "2"
+assert_eq "jq object braces pass" "$(sec "jq 'map({id})' f.json")" "0"
+assert_eq "node -e code with braces passes" "$(sec 'node -e "if(x){y}"')" "0"
+assert_eq "awk program passes" "$(sec "awk '{print \$1}' f")" "0"
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

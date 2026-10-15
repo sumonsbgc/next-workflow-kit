@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.3.1 — 2026-10-15
+- guard-secrets: the new glob shortcuts (a `*` can't match a leading dot; a bare `*` blocks only where a key file exists) now apply only to plain shell globbing. With find/rg/grep/git/tar-style matchers, `-name`/`-path`/`-g`/`--include`, dotglob/GLOBIGNORE, or a `cd`/`pushd` in the command, every pattern match blocks as before (`find . -name '*' -exec cat {} +` would have reached .env). The filesystem check resolves against the hook input's `cwd`, not the project root. Found by automated security review.
+
 ## 2.3.0 — 2026-10-15
 - Task files live in `.claude/tasks/` instead of `./tasks/`, beside the rest of the kit's project state. `tasks.sh init` scaffolds it there, and `tasks.sh dir` prints the folder in use; `/next:write-task` asks it. `NEXT_WF_TASKS_DIR` still overrides.
 - Existing projects keep working: when `.claude/tasks` doesn't exist and `./tasks` holds the kit's `TEMPLATE.md`, the helpers keep using `./tasks`. `tasks.sh migrate` moves it (and warns if `.gitignore` ignores `/tasks`); the installer says so. A user's own `./tasks` folder of notes is never taken over.

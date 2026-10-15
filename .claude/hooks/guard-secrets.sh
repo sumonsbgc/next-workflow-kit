@@ -21,6 +21,13 @@ else
   CMD="$(printf '%s' "$INPUT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).tool_input?.command||"")}catch{}})')"
 fi
 [ -n "$CMD" ] || exit 0
+# The directory the command runs in (hook input `cwd`), for the filesystem check below.
+if command -v jq >/dev/null 2>&1; then
+  HCWD="$(printf '%s' "$INPUT" | jq -r '.cwd // ""')"
+else
+  HCWD="$(printf '%s' "$INPUT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(JSON.parse(s).cwd||"")}catch{}})')"
+fi
+[ -n "$HCWD" ] && [ -d "$HCWD" ] || HCWD="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # A draft task written through the helper (`tasks.sh new <id>-<name> <<'TASK'` … `TASK`): the body is
 # quoted heredoc text — never expanded, never run — and only tasks.sh reads it, so words like
@@ -115,22 +122,31 @@ set +f
 HITS=""
 # Globs: block any word whose pattern would expand to a secret file name (.en*, .e[n]v, .*,
 # ~/.ss?/id_*), judged with bash's own pattern matching rather than a regex.
+SHELL_GLOBS=1
+[[ "$NORM" =~ (^|[^A-Za-z0-9_])(cd|pushd|popd|shopt|setopt|dotglob|globdots|GLOBIGNORE|find|fd|fdfind|rg|ag|ack|grep|egrep|git|tar|rsync|zip|unzip|du|locate|xargs|awk|perl|python3?|node|php)([^A-Za-z0-9_]|$) ]] && SHELL_GLOBS=0
+[[ "$NORM" =~ (^|[[:space:]])(-name|-iname|-path|-ipath|-wholename|-regex|-g|--glob|--include|--exclude)([[:space:]=]|$) ]] && SHELL_GLOBS=0
 set -f
 for w in $NORM; do
   case "$w" in *'*'*|*'?'*|*'['*) ;; *) continue ;; esac
   b="${w##*/}"
   for cand in .env .env.local .env.production .env.development id_rsa id_ed25519 id_ecdsa server.pem; do
+    # The two shortcuts below assume SHELL globbing. Tools with their own matchers (find -name/-path,
+    # rg -g, grep --include, git pathspecs, tar/rsync filters) let `*` match dotfiles and any depth,
+    # and dotglob/GLOBIGNORE change the shell's rules; after cd/pushd the directory the filesystem
+    # check looks in is no longer the one the glob runs in. With any of those, every match blocks.
+    if [ "$SHELL_GLOBS" = 1 ]; then
     # Shell globs never match a leading dot unless the pattern starts with one (dotglob is off),
-    # so `*` or `*/node_modules/*` cannot reach .env; only `.e*`-style patterns can.
+    # so `ls src/*` cannot reach .env; only `.e*`-style patterns can.
     case "$cand" in .*) [[ "$b" == .* ]] || continue ;; esac
     # A bare wildcard (`*`, `*.*`) is just "all files": it reaches a key only if one is really
     # there, so ask the filesystem (globbing the directory part too) instead of blocking `ls *`.
     if [[ "$cand" != .* ]] && [[ "$b" =~ ^[*?.]+$ ]]; then
       d="${w%/*}"; [ "$d" = "$w" ] && d="."; d="${d/#\~/$HOME}"
-      case "$d" in /*) ;; *) d="${CLAUDE_PROJECT_DIR:-$PWD}/$d" ;; esac
+      case "$d" in /*) ;; *) d="$HCWD/$d" ;; esac
       # shellcheck disable=SC2053
       [[ "$cand" == $b ]] && compgen -G "$d/$cand" >/dev/null 2>&1 && { HITS="$HITS $w"; break; }
       continue
+    fi
     fi
     # shellcheck disable=SC2053  # $b is meant to be a pattern here
     [[ "$cand" == $b ]] && { HITS="$HITS $w"; break; }

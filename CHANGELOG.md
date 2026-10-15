@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2.1.4 — 2026-10-15
+- evals/run.sh: a run with no metrics file (e.g. `--reference`) no longer breaks the summary (jq printed a value and failed, so the fallback added a second one).
 - guard-secrets: the block message in 2.1.3 contained backticks inside a double-quoted string, so bash ran `cat .env.example` and pasted the file into the message (found by the automated commit review). The message is plain text again; a scan confirms no hook has an unescaped backtick inside double quotes, and a regression test covers it.
 
 ## 2.1.3 — 2026-10-15

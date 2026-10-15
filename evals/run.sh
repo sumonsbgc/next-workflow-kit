@@ -101,9 +101,12 @@ for r in $(seq 1 "$RUNS"); do
   done
   [ -f "$W/.eval-server.pid" ] && kill "$(cat "$W/.eval-server.pid")" 2>/dev/null
   M="$W/.claude/.cache/metrics.jsonl"
-  COST="$(jq -s '[.[] | select(.event=="run") | (.cost_usd|tonumber)] | add // 0' "$M" 2>/dev/null || echo 0)"
+  COST=0; FP=null   # no metrics file (e.g. a reference run): jq would print a value AND fail
+  if [ -s "$M" ]; then
+  COST="$(jq -s '[.[] | select(.event=="run") | (.cost_usd|tonumber)] | add // 0' "$M" 2>/dev/null)" || COST=0
   FP="$(jq -s '[.[] | select(.event=="verdict" and (.round|tostring)=="1" and .result!="SKIPPED")] as $v
-              | if ($v|length)==0 then null else (([$v[] | select(.result|startswith("PASS"))]|length) / ($v|length)) end' "$M" 2>/dev/null || echo null)"
+              | if ($v|length)==0 then null else (([$v[] | select(.result|startswith("PASS"))]|length) / ($v|length)) end' "$M" 2>/dev/null)" || FP=null
+  fi
   ALL="$(jq -c --argjson t "$TASKS" --arg b "$BUILD" --arg tc "$TYPECHECK" --argjson cost "${COST:-0}" --argjson s "$WALL" --argjson fp "${FP:-null}" \
     '. + [{tasks:$t, build:$b, typecheck:$tc, cost_usd:$cost, seconds:$s, verifier_first_pass:$fp}]' <<<"$ALL")"
   [ "$KEEP" = 1 ] || rm -rf "${W%/app}"

@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.8 — 2026-10-15
+- guard-secrets: bounded work (automated commit review). A hook that times out does not block, so `cat .env {1..99999999}` previously got through by exhausting the expansion step. `{x..y}` ranges are never expanded, lists are expanded only up to 256 combinations, and more than 16 brace words in one command count as unsure; over a limit, the cheap letter check decides.
+
 ## 2.1.7 — 2026-10-15
 - guard-secrets now fails closed (automated commit review): more than 32 `$'…'` segments, a segment that will not decode, an unterminated `$'`, or a brace list it cannot expand safely all count as a secret reference. Brace lists are expanded from the list part of a word, so `cat $(echo .{e,x}nv)` is caught, while code with braces (`jq 'map({id})'`, `php -r`, `awk`, `node -e`) still passes.
 

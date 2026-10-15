@@ -739,5 +739,12 @@ assert_eq "jq object braces pass" "$(sec "jq 'map({id})' f.json")" "0"
 assert_eq "node -e code with braces passes" "$(sec 'node -e "if(x){y}"')" "0"
 assert_eq "awk program passes" "$(sec "awk '{print \$1}' f")" "0"
 
+group "secrets guard: bounded work (a timed-out hook doesn't block)"
+S0=$(date +%s); R="$(sec 'cat .env {1..99999999}')"; S1=$(date +%s)
+assert_eq "a huge brace range can't time the guard out (and .env is still caught)" "$R" "2"
+[ $((S1-S0)) -lt 5 ] && ok "guard stays fast on a huge range" || bad "guard stays fast on a huge range"
+S0=$(date +%s); sec 'cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b} f' >/dev/null; S1=$(date +%s)
+[ $((S1-S0)) -lt 5 ] && ok "guard stays fast on stacked brace lists" || bad "guard stays fast on stacked brace lists"
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

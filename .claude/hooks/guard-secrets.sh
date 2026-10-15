@@ -60,9 +60,25 @@ done
 # Brace expansion (.{e,x}nv → .env): expand words made only of plain characters with bash's own
 # brace/tilde expansion, globbing off, so nothing in them can run; anything else with braces is unsure.
 set -f
+BRACE_WORDS=0
 for w in $NORM; do
   # Only real brace lists expand ({a,b} / {1..3}); {x} or code like map({id}) is left alone.
   [[ "$w" =~ \{[^{}]*(,|\.\.)[^{}]*\} ]] || continue
+  # Bounded work: a hook that times out does not block, so expansion must never be expensive.
+  # Many brace words, any {x..y} range, or more than 256 combinations: don't expand — fall back
+  # to the letter check below.
+  BRACE_WORDS=$((BRACE_WORDS+1)); [ "$BRACE_WORDS" -gt 16 ] && { UNSURE=1; break; }
+  COMBOS=1; REM="$w"
+  while [[ "$REM" =~ \{([^{}]*)\} ]]; do
+    G="${BASH_REMATCH[1]}"; C="${G//[^,]/}"; COMBOS=$(( COMBOS * (${#C} + 1) ))
+    [ "$COMBOS" -gt 256 ] && break
+    REM="${REM/"{$G}"/ }"
+  done
+  if [[ "$w" == *..* ]] || [ "$COMBOS" -gt 256 ]; then
+    L="$(printf '%s' "$w" | tr -d '{},.0-9' | tr 'A-Z' 'a-z')"
+    [[ "$L" =~ (env|pem|key|auth|id_) ]] && UNSURE=1
+    continue
+  fi
   # Expand just the brace-list part and the plain characters touching it: in `$(echo .{e,x}nv)`
   # that is `.{e,x}nv`, whatever punctuation surrounds it.
   [[ "$w" =~ [A-Za-z0-9._~/*?+@%=-]*\{[^{}]*\}[A-Za-z0-9._~/*?+@%=-]* ]] && w="${BASH_REMATCH[0]}"

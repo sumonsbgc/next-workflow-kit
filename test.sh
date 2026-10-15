@@ -695,5 +695,10 @@ assert_eq "ordinary globs still pass" "$(sg 'ls src/*.ts')" "0"
 assert_eq "test globs still pass" "$(sg 'npx vitest run lib/**/*.test.ts')" "0"
 assert_eq "seeding from the example still passes" "$(sg 'cp .env.example .env.local')" "0"
 
+group "hook messages never execute text"
+CS="$TMP/cs"; mkdir -p "$CS"; printf 'MARKER_FROM_ENV_EXAMPLE=1\n' > "$CS/.env.example"
+O="$(cd "$CS" && printf '{"tool_input":{"command":"cat .env"}}' | CLAUDE_PROJECT_DIR="$CS" bash "$H/guard-secrets.sh" 2>&1)"
+assert_absent "guard-secrets message runs no command substitution" "$O" "MARKER_FROM_ENV_EXAMPLE"
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

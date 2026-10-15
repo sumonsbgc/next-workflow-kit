@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.4 — 2026-10-15
+- guard-secrets: the block message in 2.1.3 contained backticks inside a double-quoted string, so bash ran `cat .env.example` and pasted the file into the message (found by the automated commit review). The message is plain text again; a scan confirms no hook has an unescaped backtick inside double quotes, and a regression test covers it.
+
 ## 2.1.3 — 2026-10-15
 Fix for a control regression in 2.1.2, found by the automated commit review:
 - Upgrades no longer remove deny rules. 2.1.2 applied the retired-rules list to deny as well as allow, which deleted `Read(./.env.*)` (exposing `.env.backup`, `.env.prod`, …) and could delete a user's own deny rules. Deny rules only add protection, so they are never removed.

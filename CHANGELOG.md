@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.2 — 2026-10-15
+- Upgrades now remove permission rules that earlier kit versions shipped and later removed (`Read(//home/**)`, `git diff:*`, `npx playwright test:*`, …). The settings merge was a union, so an upgraded project kept them.
+
 ## 2.1.1 — 2026-10-15
 Security fixes from the automated commit review of 2.1.0:
 - settings.json: removed prefix rules that granted more than intended. `git diff:*` / `git log:*` (`--no-index`, `--output` read or write files outside the deny rules) are gone, and so is `npx playwright test:*` (`-c`/`--reporter` load any file). `git status` is now exact.

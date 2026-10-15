@@ -50,13 +50,18 @@ fi
 # Kit-owned hook commands, matched by script name. Used to drop the kit's previous entries
 # before merging (so upgrades never stack duplicates) and to remove them on uninstall.
 KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|verify)\.sh'
-strip_kit_hooks() { # stdin settings JSON -> same JSON without the kit's hook entries
-  jq --arg re "$KIT_HOOKS_RE" '
+# Permission rules earlier kit versions shipped and later ones removed. A union merge would keep
+# them forever, so they're dropped from the existing settings on every install.
+RETIRED='["Read(//home/**)","Read(./.env.*)","Bash(git diff:*)","Bash(git log:*)","Bash(git status:*)","Bash(npx playwright test:*)","Bash(npx playwright test -c .claude/verify.playwright.config.mjs:*)","Bash(npx next lint:*)"]'
+strip_kit_hooks() { # stdin settings JSON -> without the kit's hook entries and retired permission rules
+  jq --arg re "$KIT_HOOKS_RE" --argjson retired "$RETIRED" '
     if .hooks then
       .hooks |= (with_entries(.value |= (map(.hooks |= map(select((.command // "") | test($re) | not)))
                                          | map(select((.hooks | length) > 0))))
                  | with_entries(select((.value | length) > 0)))
-    else . end'
+    else . end
+    | (if .permissions.allow then .permissions.allow -= $retired else . end)
+    | (if .permissions.deny then .permissions.deny -= $retired else . end)'
 }
 
 if [ "$UNINSTALL" = 1 ]; then

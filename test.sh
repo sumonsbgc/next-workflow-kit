@@ -476,13 +476,16 @@ cat > "$U/.claude/settings.json" <<'JSON'
  {"type":"command","command":"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-rsc.sh"},
  {"type":"command","command":"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh"},
  {"type":"command","command":"$CLAUDE_PROJECT_DIR/my-own-hook.sh"}]}]},
- "permissions":{"allow":["Bash(make:*)"]}}
+ "permissions":{"allow":["Bash(make:*)","Read(//home/**)","Bash(git diff:*)"]}}
 JSON
 "$KIT/install.sh" "$U" >/dev/null 2>&1
 SU="$(cat "$U/.claude/settings.json")"
 assert_absent "upgrade drops the old per-guard hook entries" "$SU" "hooks/guard-rsc.sh"
 assert_contains "upgrade keeps the user's own hooks" "$SU" "my-own-hook.sh"
 assert_contains "upgrade adds the dispatcher" "$SU" "post-edit.sh"
+assert_absent "upgrade removes the retired /home read rule" "$SU" "//home"
+assert_absent "upgrade removes the retired git diff rule" "$SU" "git diff:*"
+assert_contains "upgrade keeps the user's own permission" "$SU" "Bash(make:*)"
 assert_eq "kit version is stamped" "$(cat "$U/.claude/next-workflow.version")" "$(cat "$KIT/VERSION")"
 assert_contains "session report shows the version" "$(CLAUDE_PROJECT_DIR="$U" bash "$U/.claude/hooks/session-context.sh")" "next-workflow $(cat "$KIT/VERSION")"
 mkdir -p "$U/tasks"; touch "$U/tasks/keep.md"

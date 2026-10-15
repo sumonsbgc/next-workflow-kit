@@ -42,9 +42,10 @@ field() { # field <file> <key> — read one frontmatter value
     | grep -m1 -E "^$2:" | sed -E "s/^$2:[[:space:]]*//" | sed -E 's/^["'"'"']|["'"'"']$//g' | sed -E 's/[[:space:]]+#.*$//'
 }
 
-is_task() { # skip docs and templates
+is_task() { # a real task file: YAML frontmatter, not a doc, template, plan or note
   case "$(basename "$1")" in README.md|TEMPLATE.md|_*) return 1 ;; esac
-  [ -f "$1" ]
+  [ -f "$1" ] || return 1
+  [ "$(head -n1 "$1" 2>/dev/null | tr -d '[:space:]')" = "---" ]
 }
 
 task_id()     { local v; v="$(field "$1" id)";     [ -n "$v" ] && printf '%s' "$v" || basename "$1" .md; }

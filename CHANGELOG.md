@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.2.1 — 2026-10-15
+- tasks.sh: only files that start with YAML frontmatter are tasks. Before, a plain note in `tasks/` (found in a real project) counted as an approved `todo` task, and `/next:task` would have started building from it. The Laravel kit already had this rule.
+
 ## 2.2.0 — 2026-10-15
 Context memory: the kit now remembers more, so each task pays less to rediscover the codebase.
 - Repo map (`tasks.sh map`, `repo-map.sh`): a cached, script-generated map of the app (routes; components/modules or models with relations, controllers with actions, tables). Regenerated only when the files it covers change. On a real app (aark-epaper) it is ~1,100 tokens versus ~9,000 to read the models and routes it summarizes.

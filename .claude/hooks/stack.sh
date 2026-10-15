@@ -23,8 +23,15 @@ design_skill() {
 # Every consumer `eval`s this output, and values come from package.json — repo content, not
 # ours. Reduce each value to a charset that cannot carry shell syntax ($, `, ", \, ;, newline).
 safe() { printf '%s' "$1" | tr -cd 'A-Za-z0-9 ._~^<>=|@/:+,*-'; }
+# Commands (CMD_*) are later `eval`'d, so they get a far stricter charset: no pipes, redirects,
+# `&`, globs or quotes — nothing that can chain a second command. Versions keep the wider set.
+safecmd() { printf '%s' "$1" | tr -cd 'A-Za-z0-9 ._/:=-'; }
 # A cache line is trusted only if it has exactly the shape this script writes.
-cache_ok() { ! grep -qvE '^[A-Z_]+="[A-Za-z0-9 ._~^<>=|@/:+,*-]*"$' "$1"; }
+# Only the exact keys this script writes are accepted: a cache that sets PATH, IFS, BASH_ENV or
+# any other variable is rejected whole (every hook evals this output, then runs commands).
+CACHE_KEYS='APP_DIR|CACHE_COMPONENTS|CMD_BUILD|CMD_LINT|CMD_TEST|CMD_TYPECHECK|FORMS|NEXT_DOCS|NEXT_INSTALLED|NEXT_MAJOR|NEXT_VERSION|ORM|PAGES_DIR|PM|SHADCN|SRC_PREFIX|STORE|TAILWIND_INSTALLED|TAILWIND_VERSION|TEST_UNIT|VALIDATION'
+cache_ok() { ! grep -qvE "^($CACHE_KEYS)=\"[A-Za-z0-9 ._~^<>=|@/:+,*-]*\"\$" "$1" &&
+             ! grep -qE '^CMD_[A-Z_]+="[^"]*[^A-Za-z0-9 ._/:="-][^"]*"$' "$1"; }
 
 if [ "${NEXT_WF_NO_CACHE:-0}" != 1 ] && [ -f "$CACHE" ] && [ -f "$PKG" ] &&
    [ "$CACHE" -nt "$PKG" ] && { [ ! -d "$ROOT/node_modules" ] || [ "$CACHE" -nt "$ROOT/node_modules" ]; } &&
@@ -129,7 +136,8 @@ fi
     "VALIDATION=$VALIDATION" "STORE=$STORE" "FORMS=$FORMS" "ORM=$ORM" \
     "TEST_UNIT=$TEST_UNIT" "TEST_E2E=$TEST_E2E" \
     "CMD_TYPECHECK=$TYPECHECK" "CMD_LINT=$LINT" "CMD_TEST=$TEST" "CMD_BUILD=$BUILD"; do
-    printf '%s="%s"\n' "${kv%%=*}" "$(safe "${kv#*=}")"
+    case "$kv" in CMD_*) v="$(safecmd "${kv#*=}")" ;; *) v="$(safe "${kv#*=}")" ;; esac
+    printf '%s="%s"\n' "${kv%%=*}" "$v"
   done
 } | tee "$CACHE" 2>/dev/null
 design_skill

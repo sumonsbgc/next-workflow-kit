@@ -700,5 +700,27 @@ CS="$TMP/cs"; mkdir -p "$CS"; printf 'MARKER_FROM_ENV_EXAMPLE=1\n' > "$CS/.env.e
 O="$(cd "$CS" && printf '{"tool_input":{"command":"cat .env"}}' | CLAUDE_PROJECT_DIR="$CS" bash "$H/guard-secrets.sh" 2>&1)"
 assert_absent "guard-secrets message runs no command substitution" "$O" "MARKER_FROM_ENV_EXAMPLE"
 
+group "security review: cached commands and task diffs"
+CI="$TMP/ci"; newproj "$CI"; mkdir -p "$CI/.claude/.cache" "$CI/node_modules"
+printf 'NEXT_VERSION="15.1.0"\nCMD_TYPECHECK="true > %s/pwned"\n' "$CI" > "$CI/.claude/.cache/stack.env"; touch "$CI/.claude/.cache/stack.env" "$CI/.claude/.cache/dirty"
+printf '{"stop_hook_active":false}' | CLAUDE_PROJECT_DIR="$CI" bash "$H/verify.sh" >/dev/null 2>&1
+[ -e "$CI/pwned" ] && bad "a tampered cached command is never executed" || ok "a tampered cached command is never executed"
+assert_absent "commands are written in the strict charset" "$(CLAUDE_PROJECT_DIR="$P" NEXT_WF_NO_CACHE=1 bash "$H/stack.sh" | grep '^CMD_')" "|"
+SD2="$TMP/sd2"; mkdir -p "$SD2/tasks"; ( cd "$SD2" && git init -q && git config user.email t@t && git config user.name t && echo "SECRET=old" > .env && printf -- '---\nid: 001\ntitle: x\nstatus: todo\n---\n' > tasks/001-x.md && git add -A && git commit -qm i )
+CLAUDE_PROJECT_DIR="$SD2" bash "$H/tasks.sh" start 001 >/dev/null; echo "SECRET=new-value" > "$SD2/.env"
+O="$(CLAUDE_PROJECT_DIR="$SD2" bash "$H/tasks.sh" diff 001)"
+assert_absent "task diff never prints a secret file's content" "$O" "new-value"
+assert_contains "task diff names the changed secret file" "$O" "secret files changed"
+
+group "security review: cache keys and quoted cp"
+KEYS_RE="$(sed -n "s/^CACHE_KEYS='\(.*\)'$/\1/p" "$H/stack.sh")"
+MISSING="$(CLAUDE_PROJECT_DIR="$P" NEXT_WF_NO_CACHE=1 bash "$H/stack.sh" | sed -n 's/^\([A-Z_]*\)=.*/\1/p' | grep -v '^DESIGN_SKILL$' | grep -vxE "$KEYS_RE" || true)"
+assert_eq "every key stack.sh writes is in the cache allow-list" "$MISSING" ""
+CK="$TMP/ck"; newproj "$CK"; mkdir -p "$CK/.claude/.cache"
+printf 'NEXT_VERSION="15.1.0"\nPATH="/nonexistent"\n' > "$CK/.claude/.cache/stack.env"; touch "$CK/.claude/.cache/stack.env"
+assert_absent "a cache that sets PATH is rejected" "$(CLAUDE_PROJECT_DIR="$CK" bash "$H/stack.sh")" "/nonexistent"
+QC="$TMP/qc"; mkdir -p "$QC"; echo SECRET > "$QC/.env.local"
+assert_eq "quoted cp onto an existing .env.local is blocked" "$(cd "$QC" && CLAUDE_PROJECT_DIR="$QC" sec 'cp .env.example ".env.local"')" "2"
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

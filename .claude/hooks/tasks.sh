@@ -261,9 +261,16 @@ case "$CMD" in
     f="$(find_task "${1:?id}")" || die "no task with id $1"
     in_git || die "not a git repository — no diff available; review the files named in the task log instead"
     BASE="$(state_get "$1" base)"; [ -n "$BASE" ] && [ "$BASE" != none ] || BASE="HEAD"
-    git -C "$ROOT" diff "$BASE" -- . ':!tasks'
-    UNTRACKED="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks')"
+    # Secret files are never printed: the diff is read by an agent, and printing it would bypass
+    # the Read deny rules. Their names are listed so nobody thinks they were untouched.
+    SECRET_PS=(":(exclude,glob)**/.env" ":(exclude,glob)**/.env.*" ":(exclude,glob)**/*.pem" ":(exclude,glob)**/*.key"
+               ":(exclude,glob)**/auth.json" ":(exclude,glob)**/id_rsa*" ":(exclude,glob)**/id_ed25519*" ":(exclude,glob)**/id_ecdsa*")
+    git -C "$ROOT" diff "$BASE" -- . ':!tasks' "${SECRET_PS[@]}"
+    UNTRACKED="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks' "${SECRET_PS[@]}")"
     [ -n "$UNTRACKED" ] && printf '\n# new files (untracked):\n%s\n' "$UNTRACKED"
+    HIDDEN="$({ git -C "$ROOT" diff --name-only "$BASE" -- . ':!tasks'; git -C "$ROOT" ls-files --others --exclude-standard -- . ':!tasks'; } |
+              while IFS= read -r p; do [ -n "$p" ] && is_secret_path "$p" && printf '%s\n' "$p"; done | sort -u)"
+    [ -n "$HIDDEN" ] && printf '\n# secret files changed (content not shown): %s\n' "$(tr '\n' ' ' <<<"$HIDDEN")"
     exit 0 ;;
 
   done)  f="$(find_task "${1:?id}")" || die "no task with id $1"; set_status "$f" "done"; echo "done $1" ;;

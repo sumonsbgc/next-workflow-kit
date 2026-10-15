@@ -27,12 +27,15 @@ fi
 # for plain literal words: no $, backticks, quotes-with-substitution, redirects in, or newlines.
 LIT='[A-Za-z0-9._*/!-]+'
 PLAIN=1   # 0 if the command has any shell syntax that could hide a second action or expansion
-case "$CMD" in *$'\n'*|*'$'*|*'`'*|*'<'*|*';'*|*'&'*|*'|'*|*'('*|*'{'*|*'\\'*) PLAIN=0 ;; esac
+case "$CMD" in *$'\n'*|*'$'*|*'`'*|*'<'*|*';'*|*'&'*|*'|'*|*'('*|*'{'*|*\\*) PLAIN=0 ;; esac
+# Quotes change what the shell sees vs what this script checks (".env.local" exists as .env.local,
+# not as a file named with quotes), so the cp exemption only applies to quote-free commands.
+NOQUOTE=1; case "$CMD" in *\"*|*\'*) NOQUOTE=0 ;; esac
 case "$PLAIN" in 0) ;; *)
   if [[ "$CMD" =~ ^[[:space:]]*(echo|printf)([[:space:]]+(\'$LIT(\\n)?\'|\"$LIT(\\n)?\"|$LIT))+[[:space:]]*\>\>?[[:space:]]*(\./)?\.gitignore[[:space:]]*$ ]]; then exit 0; fi ;;
 esac
 # Seeding a missing env file from the example reads only the example.
-if [ "$PLAIN" = 1 ] && [[ "$CMD" =~ ^[[:space:]]*cp[[:space:]]+(-n[[:space:]]+)?([^[:space:]]*\.env\.(example|sample|template|dist))[[:space:]]+([^[:space:];&|]+)[[:space:]]*$ ]]; then
+if [ "$PLAIN" = 1 ] && [ "$NOQUOTE" = 1 ] && [[ "$CMD" =~ ^[[:space:]]*cp[[:space:]]+(-n[[:space:]]+)?([^[:space:]]*\.env\.(example|sample|template|dist))[[:space:]]+([^[:space:];&|]+)[[:space:]]*$ ]]; then
   DEST="${BASH_REMATCH[4]}"; ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
   case "$DEST" in /*) ;; *) DEST="$ROOT/$DEST" ;; esac
   [ -e "$DEST" ] || exit 0

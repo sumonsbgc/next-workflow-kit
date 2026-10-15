@@ -24,7 +24,9 @@ grep -qE '"next"[[:space:]]*:' "$ROOT/package.json" 2>/dev/null || exit 0   # no
 # (greedy path match: route groups like app/(shop)/page.tsx contain parentheses)
 normalize() { sed -nE 's/^[[:space:]]*(.+)\([0-9]+,[0-9]+\): error (TS[0-9]+): (.*)$/\1: \2: \3/p' | sort -u; }
 
-typecheck() { eval "$(bash "$SELF_DIR/stack.sh")"; [ -n "$CMD_TYPECHECK" ] || return 0; (cd "$ROOT" && eval "$CMD_TYPECHECK" 2>&1); }
+# Last line of defence: only ever eval a command made of plain words.
+cmd_ok() { [[ "$1" =~ ^[A-Za-z0-9\ ._/:=-]*$ ]]; }
+typecheck() { eval "$(bash "$SELF_DIR/stack.sh")"; cmd_ok "$CMD_TYPECHECK" || return 0; [ -n "$CMD_TYPECHECK" ] || return 0; (cd "$ROOT" && eval "$CMD_TYPECHECK" 2>&1); }
 
 if [ "${1:-}" = --baseline ]; then
   mkdir -p "$CACHE"
@@ -47,6 +49,8 @@ MARK="$CACHE/dirty"
 [ -f "$MARK" ] || exit 0
 [ -d "$ROOT/node_modules" ] || { rm -f "$MARK"; exit 0; }
 eval "$(bash "$SELF_DIR/stack.sh")"
+cmd_ok "$CMD_TYPECHECK" || CMD_TYPECHECK=""
+cmd_ok "$CMD_LINT" || CMD_LINT=""
 
 FAIL=""
 if [ -n "$CMD_TYPECHECK" ]; then

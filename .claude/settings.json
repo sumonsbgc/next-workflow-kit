@@ -18,7 +18,8 @@
       "Bash(bash .claude/hooks/tasks.sh:*)",
       "Bash(bash .claude/hooks/stack.sh)",
       "Bash(git status)",
-      "Bash(node --version)"
+      "Bash(node --version)",
+      "Bash(bash .claude/hooks/repo-map.sh)"
     ],
     "deny": [
       "Read(./.env)",
@@ -43,6 +44,7 @@
   "hooks": {
     "SessionStart": [
       {
+        "matcher": "startup|resume|clear|compact|fork",
         "hooks": [
           {
             "type": "command",
@@ -93,6 +95,18 @@
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/verify.sh",
             "timeout": 300
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "^(next-.*)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-context.sh",
+            "timeout": 20
           }
         ]
       }

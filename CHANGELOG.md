@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0 — 2026-10-15
+Context memory: the kit now remembers more, so each task pays less to rediscover the codebase.
+- Repo map (`tasks.sh map`, `repo-map.sh`): a cached, script-generated map of the app (routes; components/modules or models with relations, controllers with actions, tables). Regenerated only when the files it covers change. On a real app (aark-epaper) it is ~1,100 tokens versus ~9,000 to read the models and routes it summarizes.
+- Task handoff (`tasks.sh context <id>`): the task plus what each dependency did and which files it changed (recorded at close), so dependent tasks don't re-read code a dependency just wrote.
+- Subagents get the context: a SubagentStart hook (scoped to kit agents) injects the stack report and project memory (~550 tokens) before their first prompt; before this every delegation started cold and re-explored. Per the docs this leaves the subagent's prompt cache intact.
+- Compaction: SessionStart now matches `startup|resume|clear|compact|fork` explicitly, so the stack report and memory are re-injected after auto-compaction (docs: injected context is otherwise summarized away).
+- The session report keeps the volatile task counts last, so the stable part stays a reusable prompt prefix; the report stays under the documented 10,000-character hook cap (tested).
+- Runner rules: `context` instead of `show`, and map → grep → read.
+
 ## 2.1.9 — 2026-10-15
 - guard-secrets: brace ranges are sized, not skipped (automated commit review). 2.x.8 judged every `{x..y}` by letters alone, so letter ranges such as `.e{n..n}v` slipped through. Ranges now count by their real size (letters at most 58, numbers by span); small ones are expanded and checked like lists; only huge numeric ranges, which can only produce digits, fall back to the letter check; a range it cannot size counts as unsure.
 

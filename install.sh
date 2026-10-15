@@ -49,7 +49,7 @@ fi
 
 # Kit-owned hook commands, matched by script name. Used to drop the kit's previous entries
 # before merging (so upgrades never stack duplicates) and to remove them on uninstall.
-KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|verify)\.sh'
+KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|verify|subagent-context)\.sh'
 # Permission rules earlier kit versions shipped and later ones removed. A union merge would keep
 # them forever, so they're dropped from the existing settings on every install.
 RETIRED='["Read(//home/**)","Bash(git diff:*)","Bash(git log:*)","Bash(git status:*)","Bash(npx playwright test:*)","Bash(npx playwright test -c .claude/verify.playwright.config.mjs:*)","Bash(npx next lint:*)"]'
@@ -68,7 +68,7 @@ if [ "$UNINSTALL" = 1 ]; then
   printf '\nRemoving next-workflow from %s\n\n' "$DEST"
   run "rm -rf '$DEST/commands/next' '$DEST/skills/nextjs-app-router' '$DEST/skills/react-component-conventions' '$DEST/skills/code-conventions'"
   run "rm -f '$DEST/agents/'next-*.md '$DEST/next-workflow.version' '$DEST/verify.playwright.config.mjs'"
-  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets verify verify-browser run-tasks; do
+  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets verify verify-browser run-tasks repo-map subagent-context; do
     run "rm -f '$DEST/hooks/$h.sh'"
   done
   if [ -f "$DEST/settings.json" ] && command -v jq >/dev/null 2>&1; then

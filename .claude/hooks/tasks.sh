@@ -7,6 +7,9 @@
 #   tasks.sh next                 path of the first runnable task (todo, deps done)
 #   tasks.sh nextid               the next free id, zero-padded (for /next:write-task)
 #   tasks.sh show <id>            print one task file
+#   tasks.sh context <id>         the task plus what its dependencies did (log lines, files changed):
+#                                 read this instead of re-exploring code a dependency just wrote
+#   tasks.sh map                  the cached repo map (routes, modules, models…), see repo-map.sh
 #   tasks.sh path <id>            print its path
 #   tasks.sh approve <id|all>     draft -> todo (the planner writes drafts; you approve them)
 #   tasks.sh start <id>           -> doing; records the git base so the task's diff can be shown
@@ -213,6 +216,20 @@ case "$CMD" in
     printf '%03d\n' $((MAX+1))
     ;;
 
+  map) exec bash "$SELF_DIR/repo-map.sh" "$@" ;;
+
+  context)
+    f="$(find_task "${1:?id}")" || die "no task with id $1"
+    cat "$f"
+    DEPS="$(field "$f" depends | tr -d '[]' | tr ',' ' ')"
+    for d in $DEPS; do
+      df="$(find_task "$d")" || continue
+      printf '\n---\n## Dependency %s: %s (%s)\n' "$d" "$(task_title "$df")" "$(task_status "$df")"
+      sed -n '/^## Log/,$p' "$df" | tail -n +2 | tail -5
+      [ -s "$STATE/$d.files" ] && printf 'Files it changed: %s\n' "$(tr '\n' ' ' < "$STATE/$d.files")"
+    done
+    exit 0 ;;
+
   path)  [ $# -ge 1 ] || die "usage: tasks.sh path <id>"; find_task "$1" || die "no task with id $1"; echo ;;
   show)  [ $# -ge 1 ] || die "usage: tasks.sh show <id>"; f="$(find_task "$1")" || die "no task with id $1"; cat "$f" ;;
 
@@ -286,6 +303,8 @@ case "$CMD" in
       FILES="$(printf '%s' "$PATHS" | grep -c . || true)"
     fi
     set_status "$f" "done"; append_log "$f" "$*"
+    # Remember what this task touched, so dependent tasks get it from `context` instead of re-reading.
+    [ -n "$PATHS" ] && printf '%s\n' "$PATHS" > "$STATE/$ID.files"
     wf_metric task_close id "$ID" size "$(task_size "$f")" seconds "$SECS" files "$FILES"
     echo "closed $ID (${SECS}s, $FILES files)"
     if [ "${NEXT_WF_CHECKPOINT:-off}" = commit ] && in_git; then
@@ -399,5 +418,5 @@ if (g.length) {
 JS
     ;;
 
-  *) sed -n '2,28p' "$0"; exit 1 ;;
+  *) sed -n '2,31p' "$0"; exit 1 ;;
 esac

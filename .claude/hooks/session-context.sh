@@ -78,8 +78,9 @@ TEXT="Detected stack (next-workflow $KIT_VERSION, auto-detected at session start
 - Validation: ${VALIDATION:-none detected} | Client store: ${STORE:-none detected}${FORMS:+ | Forms: $FORMS}${DESIGN_SKILL:+
 - Design: the \`frontend-design\` skill is available — load it when building new UI or restyling, and not for refactors, fixes, or components that must match existing siblings.}
 - Unit tests: ${TEST_UNIT:-none} | E2E: ${TEST_E2E:-none}
-- Verify commands: typecheck=\`${CMD_TYPECHECK:-n/a}\` lint=\`${CMD_LINT:-n/a}\` test=\`${CMD_TEST:-n/a}\` build=\`$CMD_BUILD\`$TASKS
+- Verify commands: typecheck=\`${CMD_TYPECHECK:-n/a}\` lint=\`${CMD_LINT:-n/a}\` test=\`${CMD_TEST:-n/a}\` build=\`$CMD_BUILD\`
+- Repo map: \`bash $HELPERS/tasks.sh map\` prints routes, components, lib modules and server actions (cached, regenerated when files change). Read it before exploring with grep/ls.
 
-Use these exact commands rather than inventing them. If Tailwind is absent do not add Tailwind classes; if shadcn/ui is not configured, write plain components instead of importing @/components/ui/*. Write classes for the installed Tailwind version only — a utility from a newer minor silently emits no CSS.$CONTEXT"
+Use these exact commands rather than inventing them. If Tailwind is absent do not add Tailwind classes; if shadcn/ui is not configured, write plain components instead of importing @/components/ui/*. Write classes for the installed Tailwind version only — a utility from a newer minor silently emits no CSS.$CONTEXT$TASKS"
 
 wf_context SessionStart "$TEXT"

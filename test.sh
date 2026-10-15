@@ -751,5 +751,38 @@ assert_eq "letter range .e{n..n}v is expanded and caught" "$(sec 'cat .e{n..n}v'
 assert_eq "letter range .{d..f}nv is expanded and caught" "$(sec 'cat .{d..f}nv')" "2"
 assert_eq "small numeric ranges still pass" "$(sec 'ls x{1..5}.log')" "0"
 
+group "context memory: repo map, task handoff, subagents, compaction"
+MP="$TMP/mp"; newproj "$MP"; mkdir -p "$MP/app/projects/[id]" "$MP/app/api/items" "$MP/components" "$MP/lib"
+printf 'export default function P() { return null }\n' > "$MP/app/page.tsx"
+printf 'export default function P() { return null }\n' > "$MP/app/projects/[id]/page.tsx"
+printf 'export async function GET() { return Response.json([]) }\n' > "$MP/app/api/items/route.ts"
+printf "'use client'\nexport function Btn() { return null }\n" > "$MP/components/btn.tsx"
+printf "'use server'\nexport async function archiveProject() {}\n" > "$MP/lib/actions.ts"
+O="$(CLAUDE_PROJECT_DIR="$MP" bash "$H/repo-map.sh")"
+assert_contains "map lists page routes" "$O" "/projects/[id] → app/projects/[id]/page.tsx"
+assert_contains "map lists route handlers with methods" "$O" "route handler (GET)"
+assert_contains "map lists components with exports and client flag" "$O" "btn.tsx: Btn [client]"
+assert_contains "map lists server actions" "$O" "archiveProject"
+assert_contains "map is served from cache" "$(CLAUDE_PROJECT_DIR="$MP" bash "$H/repo-map.sh"; ls "$MP/.claude/.cache")" "repo-map.key"
+printf 'export function Card() { return null }\n' > "$MP/components/card.tsx"
+assert_contains "map regenerates when files change" "$(CLAUDE_PROJECT_DIR="$MP" bash "$H/repo-map.sh")" "card.tsx: Card"
+CX="$TMP/cx"; newproj "$CX"; ( cd "$CX" && git init -q && git config user.email t@t && git config user.name t && printf '.claude/.cache/\n' > .gitignore && git add -A && git commit -qm i )
+export CLAUDE_PROJECT_DIR="$CX"; bash "$H/tasks.sh" init >/dev/null
+printf -- '---\nid: 001\ntitle: Base\nstatus: todo\n---\n' > "$CX/tasks/001-a.md"
+printf -- '---\nid: 002\ntitle: Next\nstatus: todo\ndepends: 001\n---\n' > "$CX/tasks/002-b.md"
+bash "$H/tasks.sh" start 001 >/dev/null; printf 'export const svc = 1\n' > "$CX/svc.ts"; bash "$H/tasks.sh" close 001 "added svc helper" >/dev/null
+O="$(bash "$H/tasks.sh" context 002)"
+assert_contains "context includes the dependency's log line" "$O" "added svc helper"
+assert_contains "context includes the files the dependency changed" "$O" "svc.ts"
+unset CLAUDE_PROJECT_DIR
+O="$(printf '{"agent_type":"next-ui-builder"}' | CLAUDE_PROJECT_DIR="$P" bash "$H/subagent-context.sh")"
+assert_contains "subagents get the context as SubagentStart" "$O" '"hookEventName": "SubagentStart"'
+assert_contains "subagents are told to use the map" "$O" "tasks.sh map"
+SET="$(cat "$KIT/.claude/settings.json")"
+assert_contains "context is re-injected after compaction" "$SET" "compact"
+assert_contains "SubagentStart is scoped to kit agents" "$SET" '^(next-.*)$'
+L1="$(CLAUDE_PROJECT_DIR="$P" bash "$H/session-context.sh" | jq -r .hookSpecificOutput.additionalContext | wc -c)"
+[ "$L1" -lt 9000 ] && ok "session context stays under the 10,000-char hook cap ($L1)" || bad "session context stays under the 10,000-char hook cap ($L1)"
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

@@ -23,9 +23,9 @@ Argument: **$ARGUMENTS**
 You are running against a task list, not a conversation. The same waste repeated across twenty tasks is the difference between finishing and running out of context.
 
 1. **The session-start report and `.claude/project-context.md` are already in your context.** Never re-derive what they say — no re-detecting the package manager, the Tailwind version, the test runner, or where components live.
-2. **Read only the task you are running.** `bash $T show <id>`. Not the other task files.
+2. **Read only the task you are running, with its dependency handoff.** `bash $T context <id>` prints the task plus what each dependency did and which files it changed. Trust that instead of re-reading those files to "see what's there". Not the other task files.
 3. **Read a source file once.** If you have already read it this session, you know its contents — do not re-read to "check".
-4. **Grep before you read.** `grep -rn "requireSession" --include=*.ts -l` to find the file beats reading four candidates.
+4. **Map, then grep, then read.** `bash $T map` (cached, a few hundred tokens) lists the routes, modules and models: it usually answers "where is X" with no search at all. Then one targeted grep. **Grep before you read.** `grep -rn "requireSession" --include=*.ts -l` to find the file beats reading four candidates.
 5. **Load skills by need, not by habit** — see the table below. A CSS tweak does not need the data-layer conventions.
 6. **Delegate only what pays for itself.** A subagent starts cold and re-reads context you already have; it is worth it when the work is genuinely a separate layer with its own conventions, and a waste for a two-file change. Route by size — see **Routing**.
 7. **Edit source files only with Edit/Write**, never with `sed -i`, heredocs or scripts. The guards and the formatter run on Edit/Write; shell writes are caught after the fact and cost you a round-trip.
@@ -50,7 +50,7 @@ Load the reference, not the whole skill, when the reference is what you need.
 ## Running one task
 
 1. **Claim it.** `bash $T start <id>`. If it refuses because the task is a `draft`, stop and tell the user to review it and run `bash $T approve <id>`. Drafts are unreviewed plans.
-2. **Read it.** `bash $T show <id>`. The Acceptance list is the definition of done — you will check each item at the end.
+2. **Read it.** `bash $T context <id>` (the task plus its dependencies' handoff). The Acceptance list is the definition of done — you will check each item at the end.
 3. **Orient, cheaply.** From the project context you should already know where things go. If something genuinely isn't recorded there, find it with one targeted grep and read at most one existing analogue — then add what you learned to the context file at the end.
 4. **Decide the shape before writing.** The files you will touch, the client/server split, what the data layer must expose. Server Components by default; interactivity becomes its own island file.
 5. **Implement.** Every `[test]` criterion needs a test that asserts it, because the verifier will look for it. Follow the conventions; the PostToolUse guards will tell you immediately if you break a boundary, hydration, or Tailwind rule — fix what they report rather than arguing with them.

@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.1.9 — 2026-10-15
+- guard-secrets: brace ranges are sized, not skipped (automated commit review). 2.x.8 judged every `{x..y}` by letters alone, so letter ranges such as `.e{n..n}v` slipped through. Ranges now count by their real size (letters at most 58, numbers by span); small ones are expanded and checked like lists; only huge numeric ranges, which can only produce digits, fall back to the letter check; a range it cannot size counts as unsure.
+
 ## 2.1.8 — 2026-10-15
 - guard-secrets: bounded work (automated commit review). A hook that times out does not block, so `cat .env {1..99999999}` previously got through by exhausting the expansion step. `{x..y}` ranges are never expanded, lists are expanded only up to 256 combinations, and more than 16 brace words in one command count as unsure; over a limit, the cheap letter check decides.
 

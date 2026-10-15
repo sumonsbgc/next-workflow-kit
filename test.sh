@@ -746,5 +746,10 @@ assert_eq "a huge brace range can't time the guard out (and .env is still caught
 S0=$(date +%s); sec 'cat {a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b} f' >/dev/null; S1=$(date +%s)
 [ $((S1-S0)) -lt 5 ] && ok "guard stays fast on stacked brace lists" || bad "guard stays fast on stacked brace lists"
 
+group "secrets guard: brace ranges are sized, not skipped"
+assert_eq "letter range .e{n..n}v is expanded and caught" "$(sec 'cat .e{n..n}v')" "2"
+assert_eq "letter range .{d..f}nv is expanded and caught" "$(sec 'cat .{d..f}nv')" "2"
+assert_eq "small numeric ranges still pass" "$(sec 'ls x{1..5}.log')" "0"
+
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

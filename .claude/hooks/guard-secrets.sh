@@ -65,16 +65,25 @@ for w in $NORM; do
   # Only real brace lists expand ({a,b} / {1..3}); {x} or code like map({id}) is left alone.
   [[ "$w" =~ \{[^{}]*(,|\.\.)[^{}]*\} ]] || continue
   # Bounded work: a hook that times out does not block, so expansion must never be expensive.
-  # Many brace words, any {x..y} range, or more than 256 combinations: don't expand — fall back
-  # to the letter check below.
+  # Many brace words, or more than 256 combinations (ranges counted by their real size): don't
+  # expand — fall back to the letter check below.
   BRACE_WORDS=$((BRACE_WORDS+1)); [ "$BRACE_WORDS" -gt 16 ] && { UNSURE=1; break; }
   COMBOS=1; REM="$w"
   while [[ "$REM" =~ \{([^{}]*)\} ]]; do
-    G="${BASH_REMATCH[1]}"; C="${G//[^,]/}"; COMBOS=$(( COMBOS * (${#C} + 1) ))
+    G="${BASH_REMATCH[1]}"
+    if [[ "$G" =~ ^(-?[0-9]{1,9})\.\.(-?[0-9]{1,9})(\.\.-?[0-9]{1,9})?$ ]]; then        # {1..10[..2]}
+      N=$(( BASH_REMATCH[2] - BASH_REMATCH[1] )); N=$(( (N<0 ? -N : N) + 1 ))
+    elif [[ "$G" =~ ^([A-Za-z])\.\.([A-Za-z])(\.\.-?[0-9]{1,9})?$ ]]; then             # {a..z}: at most 58
+      N=$(( $(printf '%d' "'${BASH_REMATCH[2]}") - $(printf '%d' "'${BASH_REMATCH[1]}") )); N=$(( (N<0 ? -N : N) + 1 ))
+    elif [[ "$G" == *..* && "$G" != *,* ]]; then N=999999; UNSURE=1                       # a range it can't size
+    else C="${G//[^,]/}"; N=$(( ${#C} + 1 )); fi
+    COMBOS=$(( COMBOS * N ))
     [ "$COMBOS" -gt 256 ] && break
     REM="${REM/"{$G}"/ }"
   done
-  if [[ "$w" == *..* ]] || [ "$COMBOS" -gt 256 ]; then
+  # Over the bound only numeric ranges can be that large, and they expand to digits, never to a
+  # file name, so the letter check is enough.
+  if [ "$COMBOS" -gt 256 ]; then
     L="$(printf '%s' "$w" | tr -d '{},.0-9' | tr 'A-Z' 'a-z')"
     [[ "$L" =~ (env|pem|key|auth|id_) ]] && UNSURE=1
     continue

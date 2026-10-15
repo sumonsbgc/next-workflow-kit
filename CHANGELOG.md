@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.3 — 2026-10-15
+Fix for a control regression in 2.1.2, found by the automated commit review:
+- Upgrades no longer remove deny rules. 2.1.2 applied the retired-rules list to deny as well as allow, which deleted `Read(./.env.*)` (exposing `.env.backup`, `.env.prod`, …) and could delete a user's own deny rules. Deny rules only add protection, so they are never removed.
+- `Read(./.env.*)` and `Read(./**/.env.*)` are back in the deny list. `.env.example` is read with `cat` (the secrets guard allows it); the guard message says so.
+
 ## 2.1.2 — 2026-10-15
 - Upgrades now remove permission rules that earlier kit versions shipped and later removed (`Read(//home/**)`, `git diff:*`, `npx playwright test:*`, …). The settings merge was a union, so an upgraded project kept them.
 

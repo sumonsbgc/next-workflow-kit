@@ -61,5 +61,5 @@ KEYS="$(grep -oE '[A-Za-z0-9_./-]*(\.pem|id_rsa|id_ed25519|id_ecdsa)([^A-Za-z0-9
 [ -n "$KEYS" ] && HITS="$HITS $KEYS"
 [ -n "$HITS" ] || exit 0
 
-echo "Blocked by next-workflow: this command touches secret files ($(echo $HITS)). Env files and private keys stay out of the transcript. For variable names, read .env.example (allowed). To create a missing .env.local, copy it from .env.example. Anything else: ask the user to run it themselves." >&2
+echo "Blocked by next-workflow: this command touches secret files ($(echo $HITS)). Env files and private keys stay out of the transcript. For variable names, run `cat .env.example` (allowed; the Read tool denies every .env.* file). To create a missing .env.local, copy it from .env.example. Anything else: ask the user to run it themselves." >&2
 exit 2

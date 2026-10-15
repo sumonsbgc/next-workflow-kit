@@ -476,7 +476,7 @@ cat > "$U/.claude/settings.json" <<'JSON'
  {"type":"command","command":"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-rsc.sh"},
  {"type":"command","command":"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh"},
  {"type":"command","command":"$CLAUDE_PROJECT_DIR/my-own-hook.sh"}]}]},
- "permissions":{"allow":["Bash(make:*)","Read(//home/**)","Bash(git diff:*)"]}}
+ "permissions":{"allow":["Bash(make:*)","Read(//home/**)","Bash(git diff:*)"],"deny":["Read(./.env.*)","Read(./secrets/**)"]}}
 JSON
 "$KIT/install.sh" "$U" >/dev/null 2>&1
 SU="$(cat "$U/.claude/settings.json")"
@@ -486,6 +486,8 @@ assert_contains "upgrade adds the dispatcher" "$SU" "post-edit.sh"
 assert_absent "upgrade removes the retired /home read rule" "$SU" "//home"
 assert_absent "upgrade removes the retired git diff rule" "$SU" "git diff:*"
 assert_contains "upgrade keeps the user's own permission" "$SU" "Bash(make:*)"
+assert_contains "upgrade never removes a deny rule (kit's)" "$SU" '"Read(./.env.*)"'
+assert_contains "upgrade never removes a deny rule (user's)" "$SU" "Read(./secrets/**)"
 assert_eq "kit version is stamped" "$(cat "$U/.claude/next-workflow.version")" "$(cat "$KIT/VERSION")"
 assert_contains "session report shows the version" "$(CLAUDE_PROJECT_DIR="$U" bash "$U/.claude/hooks/session-context.sh")" "next-workflow $(cat "$KIT/VERSION")"
 mkdir -p "$U/tasks"; touch "$U/tasks/keep.md"
@@ -566,7 +568,7 @@ unset CLAUDE_PROJECT_DIR
 
 group "secrets: precise rules (N5)"
 SETT="$(cat "$KIT/.claude/settings.json")"
-assert_absent "no blanket .env.* read deny (it blocked .env.example)" "$SETT" '"Read(./.env.*)"'
+assert_contains "every .env.* file is denied to the Read tool" "$SETT" '"Read(./.env.*)"'
 assert_contains "real secret files are still denied" "$SETT" '"Read(./.env.local)"'
 assert_eq "echo '.env' >> .gitignore is allowed" "$(sec 'echo ".env" >> .gitignore')" "0"
 SD="$TMP/sd"; mkdir -p "$SD"

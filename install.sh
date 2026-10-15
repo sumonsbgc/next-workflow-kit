@@ -52,7 +52,7 @@ fi
 KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|verify)\.sh'
 # Permission rules earlier kit versions shipped and later ones removed. A union merge would keep
 # them forever, so they're dropped from the existing settings on every install.
-RETIRED='["Read(//home/**)","Read(./.env.*)","Bash(git diff:*)","Bash(git log:*)","Bash(git status:*)","Bash(npx playwright test:*)","Bash(npx playwright test -c .claude/verify.playwright.config.mjs:*)","Bash(npx next lint:*)"]'
+RETIRED='["Read(//home/**)","Bash(git diff:*)","Bash(git log:*)","Bash(git status:*)","Bash(npx playwright test:*)","Bash(npx playwright test -c .claude/verify.playwright.config.mjs:*)","Bash(npx next lint:*)"]'
 strip_kit_hooks() { # stdin settings JSON -> without the kit's hook entries and retired permission rules
   jq --arg re "$KIT_HOOKS_RE" --argjson retired "$RETIRED" '
     if .hooks then
@@ -61,7 +61,7 @@ strip_kit_hooks() { # stdin settings JSON -> without the kit's hook entries and 
                  | with_entries(select((.value | length) > 0)))
     else . end
     | (if .permissions.allow then .permissions.allow -= $retired else . end)
-    | (if .permissions.deny then .permissions.deny -= $retired else . end)'
+    # deny rules are never removed (they only add protection, and some may belong to the user)'
 }
 
 if [ "$UNINSTALL" = 1 ]; then

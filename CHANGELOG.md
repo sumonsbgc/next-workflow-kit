@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.5.2 — 2026-10-23
+- The browser-check switch is now `NEXT_WF_VERIFY_BROWSER=off`. 2.5.0 called it `NEXT_WF_VERIFY=no-browser`, but `NEXT_WF_VERIFY` already selects what the Stop hook runs (`typecheck`, `typecheck,lint`, `off`). Setting it to `no-browser` silently meant typecheck-only, and browser-off couldn't be combined with lint or off. The owner guard covers the new name.
+- Guide PDF updated for 2.5.
+
 ## 2.5.1 — 2026-10-23
 Plugin hardening, from automated security review of 2.5.0.
 - allow-helpers approves only the plugin's own helpers, by absolute path. The relative `.claude/hooks/tasks.sh` form would have auto-approved whatever script the project keeps at that path.

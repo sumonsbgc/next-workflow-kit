@@ -955,9 +955,10 @@ B="$(kt stats --brief)"
 assert_contains "stats --brief gives the first-pass rate" "$B" "first-pass 0% (0/1)"
 assert_contains "and the recent failure" "$B" "201: the empty state is missing"
 assert_contains "the session report carries the track record" "$(CLAUDE_PROJECT_DIR="$K" bash "$H/session-context.sh")" "Track record: verifier first-pass"
-assert_contains "and says when browser checks are off" "$(CLAUDE_PROJECT_DIR="$K" NEXT_WF_VERIFY=no-browser bash "$H/session-context.sh")" "browser checks are OFF"
-assert_contains "verify-browser.sh honours no-browser" "$(cd "$K" && CLAUDE_PROJECT_DIR="$K" NEXT_WF_VERIFY=no-browser NEXT_WF_DEV_URL=http://x bash "$H/verify-browser.sh" 201)" "UNVERIFIED: browser checks are off"
-for c in 'NEXT_WF_REQUIRE_VERDICT=off bash .claude/hooks/tasks.sh close 201 x' 'export NEXT_WF_SKIP_VERIFY_LINES=60' 'env NEXT_WF_VERIFY=no-browser claude -p x'; do
+assert_absent "the Stop-hook mode NEXT_WF_VERIFY no longer switches browser checks" "$(CLAUDE_PROJECT_DIR="$K" NEXT_WF_VERIFY=typecheck,lint bash "$H/session-context.sh")" "browser checks are OFF"
+assert_contains "and says when browser checks are off" "$(CLAUDE_PROJECT_DIR="$K" NEXT_WF_VERIFY_BROWSER=off bash "$H/session-context.sh")" "browser checks are OFF"
+assert_contains "verify-browser.sh honours NEXT_WF_VERIFY_BROWSER=off" "$(cd "$K" && CLAUDE_PROJECT_DIR="$K" NEXT_WF_VERIFY_BROWSER=off NEXT_WF_DEV_URL=http://x bash "$H/verify-browser.sh" 201)" "UNVERIFIED: browser checks are off"
+for c in 'NEXT_WF_REQUIRE_VERDICT=off bash .claude/hooks/tasks.sh close 201 x' 'export NEXT_WF_SKIP_VERIFY_LINES=60' 'env NEXT_WF_VERIFY_BROWSER=off claude -p x'; do
   assert_eq "owner guard blocks the gate's switches: $c" "$(own "$c")" "2"
 done
 assert_eq "owner guard allows reading them" "$(own 'printenv NEXT_WF_DEV_URL')" "0"

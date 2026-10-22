@@ -36,8 +36,8 @@ NORM="$(printf '%s' "$CMD" | tr -d "\"'\\\\")"
 
 # The verification gate's switches belong to the user (settings env or their own shell). An
 # agent that sets one inline, or exports it, is turning off the check on its own work.
-if [[ "$NORM" =~ (^|[^A-Za-z0-9_])NEXT_WF_(REQUIRE_VERDICT|SKIP_VERIFY_LINES|VERIFY)= ]]; then
-  block "NEXT_WF_REQUIRE_VERDICT, NEXT_WF_SKIP_VERIFY_LINES and NEXT_WF_VERIFY are the user's settings. Run the command without them; if the gate is in the way, tell the user."
+if [[ "$NORM" =~ (^|[^A-Za-z0-9_])NEXT_WF_(REQUIRE_VERDICT|SKIP_VERIFY_LINES|VERIFY|VERIFY_BROWSER)= ]]; then
+  block "NEXT_WF_REQUIRE_VERDICT, NEXT_WF_SKIP_VERIFY_LINES, NEXT_WF_VERIFY and NEXT_WF_VERIFY_BROWSER are the user's settings. Run the command without them; if the gate is in the way, tell the user."
 fi
 
 # Recording the type-error baseline is the user's job: an agent that baselines its own errors

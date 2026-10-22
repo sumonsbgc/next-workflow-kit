@@ -188,7 +188,7 @@ Long batches — each task in a fresh session, optional commit per task:
 Around the work:  /next:test  /next:review  /next:audit  /next:ship
 Numbers:          bash .claude/hooks/tasks.sh stats
 
-Optional, in your shell (Claude can't change these): NEXT_WF_VERIFY=no-browser skips Playwright
+Optional, in your shell (Claude can't change these): NEXT_WF_VERIFY_BROWSER=off skips Playwright
 for [browser] criteria (they stay UNVERIFIED for you to check); NEXT_WF_SKIP_VERIFY_LINES=40 lets
 tiny [review]-only tasks skip the verifier (default 20, max 60); NEXT_WF_STACK_MODE=kit|match.
 The secrets guard is a speed bump: keep production secrets out of the project folder.

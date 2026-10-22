@@ -85,8 +85,8 @@ REC="$(CLAUDE_PROJECT_DIR="$ROOT" bash "$SELF_DIR/tasks.sh" stats --brief 2>/dev
 [ -n "$REC" ] && RECORD="
 - Track record: $REC"
 VERIFYLINE=""
-[ "${NEXT_WF_VERIFY:-full}" = no-browser ] && VERIFYLINE="
-- Verification: browser checks are OFF (NEXT_WF_VERIFY=no-browser, set by the user to save tokens). The verifier marks [browser] criteria UNVERIFIED without starting Playwright; the user checks them."
+[ "${NEXT_WF_VERIFY_BROWSER:-on}" = off ] && VERIFYLINE="
+- Verification: browser checks are OFF (NEXT_WF_VERIFY_BROWSER=off, set by the user to save tokens). The verifier marks [browser] criteria UNVERIFIED without starting Playwright; the user checks them."
 
 TEXT="Detected stack (next-workflow $KIT_VERSION, auto-detected at session start — this report is the source of truth for the stack):
 - Kit helpers: \`$HELPERS\` — run \`bash $HELPERS/tasks.sh …\` (and run-tasks.sh, verify.sh) from there.

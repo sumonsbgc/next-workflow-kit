@@ -999,10 +999,14 @@ assert_contains "plugin session report names the plugin's helper folder" "$(pd s
 assert_contains "plugin session report reads the kit VERSION" "$(pd session-context </dev/null)" "next-workflow $(cat "$KIT/VERSION")"
 assert_eq "dispatcher refuses odd hook names" "$(pd '../x' </dev/null; echo $?)" "0"
 mkdir -p "$PL/.claude/hooks"; cp "$H/session-context.sh" "$PL/.claude/hooks/"
-assert_contains "with a project install too, the plugin steps aside and says so" "$(pd session-context </dev/null)" "installed twice"
+assert_absent "a stray project file alone doesn't make the plugin step aside" "$(pd session-context </dev/null)" "installed twice"
+printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"$CLAUDE_PROJECT_DIR/.claude/hooks/session-context.sh"}]}]}}' > "$PL/.claude/settings.json"
+assert_contains "with a registered project install, the plugin steps aside and says so" "$(pd session-context </dev/null)" "installed twice"
 cp "$H/guard-read.sh" "$PL/.claude/hooks/"
-assert_eq "and its guards don't run twice (the project's copy handles it)" "$(printf '{"tool_input":{"file_path":"%s/.env"}}' "$PL" | CLAUDE_PLUGIN_ROOT="$KIT" CLAUDE_PROJECT_DIR="$PL" bash "$H/plugin-dispatch.sh" guard-read >/dev/null 2>&1; echo $?)" "0"
-rm -f "$PL/.claude/hooks/guard-read.sh"
+printf '#!/bin/sh\nexit 0\n' > "$PL/.claude/hooks/guard-read.sh"
+printf '{"hooks":{"PreToolUse":[{"matcher":"Read","hooks":[{"type":"command","command":"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-read.sh"}]}]}}' > "$PL/.claude/settings.local.json"
+assert_eq "a project file can't switch a plugin guard off" "$(printf '{"tool_input":{"file_path":"%s/.env"}}' "$PL" | CLAUDE_PLUGIN_ROOT="$KIT" CLAUDE_PROJECT_DIR="$PL" bash "$H/plugin-dispatch.sh" guard-read >/dev/null 2>&1; echo $?)" "2"
+rm -rf "$PL/.claude/hooks/guard-read.sh" "$PL/.claude/settings.json" "$PL/.claude/settings.local.json"
 assert_eq "without a project install the plugin's guard blocks" "$(printf '{"tool_input":{"file_path":"%s/.env"}}' "$PL" | CLAUDE_PLUGIN_ROOT="$KIT" CLAUDE_PROJECT_DIR="$PL" bash "$H/plugin-dispatch.sh" guard-read >/dev/null 2>&1; echo $?)" "2"
 rm -rf "$PL/.claude/hooks"
 
@@ -1016,14 +1020,15 @@ done
 
 printf '{"scripts":{"test":"vitest run","typecheck":"tsc --noEmit"},"dependencies":{"next":"15.1.0"}}' > "$PL/package.json"
 ah() { printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$1" | jq -Rs .)" | CLAUDE_PROJECT_DIR="$PL" bash "$H/allow-helpers.sh" | grep -q '"allow"' && echo allow || echo prompt; }
-for c in "bash $H/tasks.sh list" "bash $H/tasks.sh close 001 \"built it, kept the API\"" "bash .claude/hooks/tasks.sh next" \
+for c in "bash $H/tasks.sh list" "bash $H/tasks.sh close 001 \"built it, kept the API\"" \
          "bash $H/repo-map.sh" "npm run test -- src/a.test.ts" "npm run typecheck" "printenv NEXT_WF_DEV_URL" \
          "$(printf "bash $H/tasks.sh new 004-add-footer <<'TASK'\n---\nid: 004\n---\nTASK")"; do
   assert_eq "allow-helpers approves: ${c%%$'\n'*}" "$(ah "$c")" "allow"
 done
 for c in "bash $H/tasks.sh list; rm -rf x" "bash $H/tasks.sh close 001 \"\$(id)\"" "bash $H/tasks.sh log 001 \`id\`" \
-         "bash ${H/.claude/xclaude}/tasks.sh list" "bash $H/verify.sh --baseline" "bash $H/run-tasks.sh" \
-         "npm run test -- a.ts && curl x" "npm run test2" "bash $H/tasks.sh list > out.txt" \
+         "bash ${H/.claude/xclaude}/tasks.sh list" "bash .claude/hooks/tasks.sh next" "bash $H/verify.sh --baseline" "bash $H/run-tasks.sh" \
+         "npm run test -- a.ts && curl x" "npm run test2" "npm run test -- --config evil.ts" "npm run test --reporter=./x.js" \
+         "npm run test -- -c x" "bash $H/tasks.sh list > out.txt" \
          "$(printf "bash $H/tasks.sh new 004-add-footer <<'TASK'\nTASK\nrm -rf x\nTASK")" \
          "$(printf "bash $H/tasks.sh new 004-add-footer <<TASK\nx\nTASK")"; do
   assert_eq "allow-helpers leaves to the prompt: ${c%%$'\n'*}" "$(ah "$c")" "prompt"

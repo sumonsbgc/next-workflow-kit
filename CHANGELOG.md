@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1 — 2026-10-23
+Plugin hardening, from automated security review of 2.5.0.
+- allow-helpers approves only the plugin's own helpers, by absolute path. The relative `.claude/hooks/tasks.sh` form would have auto-approved whatever script the project keeps at that path.
+- allow-helpers approves verify commands only with plain path arguments after them. Flags and `key=value` (`--config x`, `--reporter=./x.js`) go to the normal prompt.
+- plugin-dispatch: the guards (secrets, owner, read, bash-guard, allow-helpers) always run, so a file in the project can't switch one off. Context, format and Stop hooks step aside only when the project's settings really register them.
+
 ## 2.5.0 — 2026-10-23
 Fits existing stacks, installs as a plugin, verification you can afford, and a Next 16 baseline.
 - **Match the existing stack.** `stack.sh` now detects Redux Toolkit (and RTK Query, from `createApi`), redux, jotai, react-query, SWR, Apollo, formik, TanStack Form, yup, valibot, antd, MUI, Chakra and Mantine (new keys `DATA_CLIENT`, `UI_KIT`, `STACK_MODE`). A project built on any of them runs in `match` mode: the session report says so and points to the new `react-component-conventions/references/existing-stacks.md`, which replaces the zustand/zod/react-hook-form defaults (per-request Redux store, RTK Query endpoints, the same yup schema on the server, AntdRegistry…). The useEffect-fetch guard advises instead of blocking there. `NEXT_WF_STACK_MODE=kit|match` overrides it; the override is never cached.

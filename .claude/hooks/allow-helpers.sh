@@ -5,7 +5,7 @@
 # "allow" never overrides the user's deny or ask rules; it only skips the default prompt.
 #
 # Approved, and nothing else (anything that doesn't match falls through to the normal prompt):
-#   bash <helpers>/tasks.sh|stack.sh|repo-map.sh|verify-browser.sh <plain args>
+#   bash <plugin helpers, absolute>/tasks.sh|stack.sh|repo-map.sh|verify-browser.sh <plain args>
 #   bash <helpers>/tasks.sh new <id>-<slug> <<'TAG' … TAG     (quoted heredoc: never expanded)
 #   the project's detected typecheck/lint/test/build commands, plus plain path arguments
 #   printenv NEXT_WF_DEV_URL · git status · node --version
@@ -29,14 +29,17 @@ plain() { [[ "$1" != *[\$\`\;\&\|\<\>\\\*\?\{\}\(\)]* ]] && [[ "$1" != *$'\n'* ]
 
 # The helpers folder as a regex literal: its dots (".claude", "2.5.0") must not match any character.
 H="$(printf '%s' "$SELF_DIR" | sed 's/[]\\.^$*+?(){}|[]/\\&/g')"
-HELPER_RE="^bash ($H|\\.claude/hooks)/(tasks|stack|repo-map|verify-browser)\\.sh( .*)?$"
+# Only the plugin's own copies, by absolute path. A relative `.claude/hooks/…` would run whatever
+# the project has at that path; when the project really has its own install, plugin-dispatch.sh
+# skips this hook and the project's settings.json allow rules apply instead.
+HELPER_RE="^bash $H/(tasks|stack|repo-map|verify-browser)\\.sh( .*)?$"
 
 # The task-writing heredoc: exactly one command line, a quoted delimiter, nothing after it.
 FIRST="${CMD%%$'\n'*}"
 TQ="'"
 if [ "$FIRST" != "$CMD" ] &&
-   [[ "$FIRST" =~ ^bash\ ($H|\.claude/hooks)/tasks\.sh\ new\ [0-9]{3,}-[a-z0-9]+(-[a-z0-9]+)*\ \<\<\ ?($TQ([A-Za-z_]+)$TQ|\"([A-Za-z_]+)\")$ ]]; then
-  TAG="${BASH_REMATCH[4]}${BASH_REMATCH[5]}"
+   [[ "$FIRST" =~ ^bash\ $H/tasks\.sh\ new\ [0-9]{3,}-[a-z0-9]+(-[a-z0-9]+)*\ \<\<\ ?($TQ([A-Za-z_]+)$TQ|\"([A-Za-z_]+)\")$ ]]; then
+  TAG="${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
   BODY="${CMD#*$'\n'}"; BODY="${BODY%"${BODY##*[![:space:]]}"}"
   [ "${BODY##*$'\n'}" = "$TAG" ] && [ "$(grep -cxF -- "$TAG" <<<"$BODY")" = 1 ] && allow "tasks.sh new"
   exit 0
@@ -44,20 +47,26 @@ fi
 
 plain "$CMD" || exit 0
 
-[[ "$CMD" =~ $HELPER_RE ]] && allow "${BASH_REMATCH[2]}.sh"
+[[ "$CMD" =~ $HELPER_RE ]] && allow "${BASH_REMATCH[1]}.sh"
 
 case "$CMD" in
   'printenv NEXT_WF_DEV_URL'|'git status'|'node --version') allow "$CMD" ;;
 esac
 
 # The verify commands detected for this project (values already restricted to a strict charset),
-# optionally followed by file paths or flags: `npm run test -- src/x.test.ts`.
+# optionally followed by file paths: `npm run test -- src/x.test.ts`. Paths only: no flags and no
+# `=`, so nothing like `--config evil.ts` or `--reporter=./x.js` rides along (those prompt).
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 eval "$(CLAUDE_PROJECT_DIR="$ROOT" bash "$SELF_DIR/stack.sh" 2>/dev/null | grep -E '^CMD_(TYPECHECK|LINT|TEST|BUILD)=')"
 for c in "${CMD_TYPECHECK:-}" "${CMD_LINT:-}" "${CMD_TEST:-}" "${CMD_BUILD:-}"; do
   [ -n "$c" ] || continue
-  if [ "$CMD" = "$c" ] || { [[ "$CMD" == "$c "* ]] && [[ "${CMD#"$c "}" =~ ^[A-Za-z0-9._/@:=\ -]+$ ]]; }; then
-    allow "verify command"
+  [ "$CMD" = "$c" ] && allow "verify command"
+  if [[ "$CMD" == "$c "* ]]; then
+    REST="${CMD#"$c "}"; REST="${REST#-- }"
+    read -ra ARGS <<<"$REST"
+    OK=1
+    for a in "${ARGS[@]}"; do [[ "$a" =~ ^[A-Za-z0-9_./@][A-Za-z0-9_./@:-]*$ ]] || OK=0; done
+    [ "${#ARGS[@]}" -gt 0 ] && [ "$OK" = 1 ] && allow "verify command"
   fi
 done
 exit 0

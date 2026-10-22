@@ -49,19 +49,20 @@ Load the reference, not the whole skill, when the reference is what you need.
 
 ## Running one task
 
-1. **Claim it.** `bash $T start <id>`. If it refuses because the task is a `draft`, stop and tell the user to review it and run `bash $T approve <id>`. Drafts are unreviewed plans.
+1. **Claim it.** `bash $T start <id>`.
 2. **Read it.** `bash $T context <id>` (the task plus its dependencies' handoff). The Acceptance list is the definition of done — you will check each item at the end.
 3. **Orient, cheaply.** From the project context you should already know where things go. If something genuinely isn't recorded there, find it with one targeted grep and read at most one existing analogue — then add what you learned to the context file at the end.
 4. **Decide the shape before writing.** The files you will touch, the client/server split, what the data layer must expose. Server Components by default; interactivity becomes its own island file.
 5. **Implement.** Every `[test]` criterion needs a test that asserts it, because the verifier will look for it. Follow the conventions; the PostToolUse guards will tell you immediately if you break a boundary, hydration, or Tailwind rule — fix what they report rather than arguing with them.
 6. **Verify** — see below.
-7. **Get an independent verdict.** First run `bash $T can-skip-verify <id>`.
+7. **Get an independent verdict — never skipped.** `close` refuses until a verdict is recorded. First run `bash $T can-skip-verify <id>`.
    - It says `yes` (every criterion is `[review]` and the diff is 20 lines or fewer): check the list yourself, item by item, and record `bash $T verdict <id> SKIPPED`.
    - Otherwise delegate to `next-verifier` with just the task id. It reads the task and `bash $T diff <id>` itself, and never sees your reasoning. That's the point. After **every** verifier round, record it with `bash $T verdict <id> PASS|FAIL|UNVERIFIED <round>` (`PASS WITH UNVERIFIED` → `UNVERIFIED`).
    - `FAIL` → fix exactly what it lists, re-verify. After two failed rounds, `bash $T block <id> "<the failing criteria>"` and stop.
    - `PASS WITH UNVERIFIED` → close, and name the unverified `[browser]` criteria in the log line so the user can check them.
 8. **Close it.** `bash $T close <id> "<one line: what you did and any decision you made>"`.
-9. **Record what you learned** — see **Memory**.
+9. **Never publish.** No `git push`, no `gh pr create`/`merge` — a hook blocks them. Leave the work in the tree (or in local checkpoint commits) and tell the user it is ready.
+10. **Record what you learned** — see **Memory**.
 
 ### Ambiguity
 

@@ -3,7 +3,7 @@
 # Deterministic bookkeeping so the model never reads a task file it isn't working on.
 #
 #   tasks.sh init                 scaffold the tasks folder (.claude/tasks) from the templates
-#   tasks.sh new <id>-<slug>      write a draft task from stdin (no .claude/ write prompt)
+#   tasks.sh new <id>-<slug>      write a todo task from stdin (no .claude/ write prompt)
 #   tasks.sh dir                  print the tasks folder, relative to the project
 #   tasks.sh migrate              move a pre-2.3 ./tasks folder to .claude/tasks
 #   tasks.sh list [status]        one line per task: id, status, title [size]
@@ -14,10 +14,10 @@
 #                                 read this instead of re-exploring code a dependency just wrote
 #   tasks.sh map                  the cached repo map (routes, modules, models…), see repo-map.sh
 #   tasks.sh path <id>            print its path
-#   tasks.sh approve <id|all>     draft -> todo (the planner writes drafts; you approve them)
 #   tasks.sh start <id>           -> doing; records the git base so the task's diff can be shown
 #   tasks.sh diff <id>            everything this task changed since it started (needs git)
-#   tasks.sh close <id> <text>    -> done + log line; with NEXT_WF_CHECKPOINT=commit, one local commit
+#   tasks.sh close <id> <text>    -> done + log line;
+#                                 refuses until a verdict is recorded; with NEXT_WF_CHECKPOINT=commit, one local commit
 #                                 holding only this task's files (never secrets, never pre-existing edits)
 #   tasks.sh block <id> <reason>  -> blocked, reason logged
 #   tasks.sh undo <id> [--cascade]  revert the task's checkpoint; refuses while done tasks depend on it
@@ -28,7 +28,7 @@
 #   tasks.sh count [status]       number of tasks, for cheap status checks
 #   tasks.sh stats                cost/time/guard summary from .claude/.cache/metrics.jsonl
 #
-# Statuses: draft -> todo -> doing -> done | blocked.
+# Statuses: todo -> doing -> done | blocked.
 # A task is a .md file whose FIRST LINE is `---` (YAML frontmatter). Plans, notes and scratch
 # files that happen to live in the tasks folder are ignored, not run.
 # Tasks live in .claude/tasks (override with NEXT_WF_TASKS_DIR, relative to the project).
@@ -109,7 +109,11 @@ in_git() { git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; }
 state_get() { # state_get <id> <key>
   [ -f "$STATE/$1.env" ] && sed -n "s/^$2=//p" "$STATE/$1.env" | head -1
 }
-
+state_set() { # state_set <id> <key> <value>
+  mkdir -p "$STATE"
+  { [ -f "$STATE/$1.env" ] && grep -v "^$2=" "$STATE/$1.env"; printf '%s=%s\n' "$2" "$3"; } > "$STATE/$1.env.tmp"
+  mv "$STATE/$1.env.tmp" "$STATE/$1.env"
+}
 # Paths that must never be committed by a checkpoint, whatever .gitignore says.
 is_secret_path() {
   case "$(basename "$1")" in
@@ -182,8 +186,8 @@ case "$CMD" in
 
   dir) echo "$TASKS_REL" ;;
 
-  new) # new <id>-<kebab-title>, task text on stdin: writes a DRAFT task file. Claude Code
-       # prompts on every Write/Edit under .claude/, so planners write drafts through here.
+  new) # new <id>-<kebab-title>, task text on stdin: writes a todo task file. Claude Code
+       # prompts on every Write/Edit under .claude/, so planners write tasks through here.
     NAME="${1:?usage: tasks.sh new <id>-<kebab-title> < task.md}"
     [[ "$NAME" =~ ^([0-9]{3,})-[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "bad name '$NAME' — want <id>-<kebab-title>, e.g. 004-add-footer"
     NID="${BASH_REMATCH[1]}"
@@ -191,12 +195,12 @@ case "$CMD" in
     BODY="$(head -c 200000)"
     [ "$(printf '%s\n' "$BODY" | head -n1 | tr -d '[:space:]')" = "---" ] || die "the task must start with a --- frontmatter line"
     FM="$(printf '%s\n' "$BODY" | sed -n '2,/^---[[:space:]]*$/p')"
-    printf '%s\n' "$FM" | grep -qE "^id:[[:space:]]*['\"]?$NID['\"]?[[:space:]]*$" || die "frontmatter id must be $NID"
-    printf '%s\n' "$FM" | grep -qE '^status:[[:space:]]*draft[[:space:]]*$' || die "new tasks are drafts: set status: draft"
+    printf '%s\n' "$FM" | grep -qE "^id:[[:space:]]*['\"]?${NID}['\"]?[[:space:]]*$" || die "frontmatter id must be $NID"
+    printf '%s\n' "$FM" | grep -qE '^status:[[:space:]]*todo[[:space:]]*$' || die "new tasks start as todo: set status: todo"
     mkdir -p "$DIR" || die "cannot create $TASKS_REL"
     OUT="$DIR/$NAME.md"
     printf '%s\n' "$BODY" > "$OUT.tmp.$$" && mv "$OUT.tmp.$$" "$OUT" || { rm -f "$OUT.tmp.$$"; die "could not write $OUT"; }
-    echo "wrote $TASKS_REL/$NAME.md (draft)"
+    echo "wrote $TASKS_REL/$NAME.md"
     ;;
 
   migrate)
@@ -278,24 +282,8 @@ case "$CMD" in
   path)  [ $# -ge 1 ] || die "usage: tasks.sh path <id>"; find_task "$1" || die "no task with id $1"; echo ;;
   show)  [ $# -ge 1 ] || die "usage: tasks.sh show <id>"; f="$(find_task "$1")" || die "no task with id $1"; cat "$f" ;;
 
-  approve)
-    [ $# -ge 1 ] || die "usage: tasks.sh approve <id|all>"
-    if [ "$1" = all ]; then
-      N=0
-      for f in "$DIR"/*.md; do
-        is_task "$f" || continue
-        [ "$(task_status "$f")" = draft ] && { set_status "$f" todo; N=$((N+1)); }
-      done
-      echo "approved $N"
-    else
-      f="$(find_task "$1")" || die "no task with id $1"
-      [ "$(task_status "$f")" = draft ] || die "task $1 is $(task_status "$f"), not draft"
-      set_status "$f" todo; echo "approved $1"
-    fi ;;
-
   start)
     f="$(find_task "${1:?id}")" || die "no task with id $1"
-    [ "$(task_status "$f")" = draft ] && die "task $1 is still a draft — review it, then: tasks.sh approve $1"
     set_status "$f" doing
     mkdir -p "$STATE"
     BASE="none"
@@ -346,6 +334,16 @@ case "$CMD" in
     if in_git; then
       PATHS="$(task_paths "$ID")"
       FILES="$(printf '%s' "$PATHS" | grep -c . || true)"
+    fi
+    # Closing needs an independent verdict: the verifier's, or a SKIPPED that can-skip-verify allowed.
+    VERDICT="$(state_get "$ID" verdict)"
+    if [ "${NEXT_WF_REQUIRE_VERDICT:-on}" != off ]; then
+      case "$VERDICT" in
+        PASS|UNVERIFIED) ;;
+        SKIPPED) [ "$(state_get "$ID" skip_ok)" = 1 ] || die "task $ID: SKIPPED is only valid after can-skip-verify said yes — run the verifier" ;;
+        FAIL) die "task $ID: the last verdict is FAIL — fix what it listed and verify again, or block the task" ;;
+        *) die "task $ID: no verdict recorded — verify it first (can-skip-verify, else next-verifier), then: tasks.sh verdict $ID <result>" ;;
+      esac
     fi
     set_status "$f" "done"; append_log "$f" "$*"
     # Remember what this task touched, so dependent tasks get it from `context` instead of re-reading.
@@ -401,6 +399,7 @@ case "$CMD" in
   verdict)
     f="$(find_task "${1:?id}")" || die "no task with id $1"
     case "${2:-}" in PASS|FAIL|UNVERIFIED|SKIPPED) ;; *) die "usage: tasks.sh verdict <id> PASS|FAIL|UNVERIFIED|SKIPPED [round]" ;; esac
+    state_set "$1" verdict "$2"
     wf_metric verdict id "$1" result "$2" round "${3:-1}"
     echo "verdict $1: $2 (round ${3:-1})" ;;
 
@@ -416,6 +415,7 @@ case "$CMD" in
     NEW="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ":!$TASKS_REL" ':!.claude' | while IFS= read -r p; do wc -l < "$ROOT/$p"; done | awk '{a+=$1} END{print a+0}')"
     T=$((LINES + NEW))
     [ "$T" -le 20 ] || { echo "no: diff is $T lines (> 20)"; exit 1; }
+    state_set "$1" skip_ok 1
     echo "yes: all criteria [review], diff $T lines" ;;
 
   block) f="$(find_task "${1:?id}")" || die "no task with id $1"; set_status "$f" blocked
@@ -463,5 +463,5 @@ if (g.length) {
 JS
     ;;
 
-  *) sed -n '2,31p' "$0"; exit 1 ;;
+  *) sed -n '2,36p' "$0"; exit 1 ;;
 esac

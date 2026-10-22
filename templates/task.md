@@ -1,7 +1,7 @@
 ---
 id: 001
 title: Short imperative name
-status: todo        # draft | todo | doing | done | blocked
+status: todo        # todo | doing | done | blocked
 depends:            # optional: comma-separated ids that must be done first
 size: small         # small | large — large runs the full phased build (/next:feature)
 ---

@@ -3,8 +3,7 @@
 One file per task. Write them with `/next:write-task`, run them with `/next:task`.
 
 ```
-/next:write-task <what you want>   plan it: the planner (Opus) writes draft task files
-bash .claude/hooks/tasks.sh approve all      after you have read the drafts
+/next:write-task <what you want>   plan it: the planner (Opus) writes task files, ready to run
 /next:task            build the next runnable task (Sonnet)
 /next:task 003        build a specific task
 /next:feature 003     force the full phased build on task 003
@@ -44,8 +43,9 @@ six components is really four tasks, and it will be implemented better as four.
    errors fail it; errors that were already there are baselined.
 4. Hands the task and its diff to an independent verifier, which checks every acceptance
    criterion without seeing the builder's reasoning. A failing criterion goes back for fixing.
-5. Marks the task `done`, appends a one-line log, and records anything newly learned about the
-   codebase in `.claude/project-context.md` so the next task doesn't rediscover it.
+5. Marks the task `done`, appends a one-line log (naming any criteria only you can check), and
+   records anything newly learned about the codebase in `.claude/project-context.md` so the next
+   task doesn't rediscover it.
 
 It stops and asks only when a task is ambiguous in a way that would change the design.
 Anything else it decides, states in the log, and keeps moving.
@@ -56,10 +56,12 @@ Each criterion says how it will be proven, because an independent verifier check
 task can close:
 
 - `[test]`: a test must assert it (validation, authorization, a helper's output)
-- `[browser]`: only visible in the running app; checked in a browser when `NEXT_WF_DEV_URL` is set
+- `[browser]`: only visible in the running app; checked in a browser when `NEXT_WF_DEV_URL` is set.
+  Without it they come back UNVERIFIED, and the log line names them for you to check.
 - `[review]`: provable by reading the code
 
 ## Status
 
-`draft` → (you approve) → `todo` → `doing` → `done`, or `blocked` with a reason in the log. Statuses are maintained by
-the runner; you can edit them by hand at any time.
+`todo` → `doing` → `done`, or `blocked` with a reason in the log. A task cannot close without a
+verifier verdict. Claude never pushes or opens a pull request (a hook blocks it); commits, if any,
+stay local. You can edit statuses by hand at any time.

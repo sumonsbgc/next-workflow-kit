@@ -13,10 +13,10 @@ Task id(s): **$ARGUMENTS**
 
 For each id, in the order given, skipping any whose dependencies aren't done (`bash $T list` shows them):
 
-1. `bash $T start <id>` (it refuses drafts; tell the user to approve the task first), then `bash $T show <id>`. The Acceptance list is the definition of done.
+1. `bash $T start <id>`, then `bash $T show <id>`. The Acceptance list is the definition of done.
 2. Run the phases below.
-3. Delegate to `next-verifier` with the task id for an independent verdict, and record each round: `bash $T verdict <id> PASS|FAIL|UNVERIFIED <round>`. On `FAIL`, fix exactly what it lists and re-verify; after two failed rounds, `bash $T block <id> "<failing criteria>"` and stop. On `PASS WITH UNVERIFIED`, name the unverified criteria in the close log line.
-4. `bash $T close <id> "<one line: what was built and any decision made>"`.
+3. Delegate to `next-verifier` with the task id for an independent verdict, and record each round: `bash $T verdict <id> PASS|FAIL|UNVERIFIED <round>`. On `FAIL`, fix exactly what it lists and re-verify; after two failed rounds, `bash $T block <id> "<failing criteria>"` and stop. Never skip this: `close` refuses without a recorded verdict. On `PASS WITH UNVERIFIED`, name the unverified criteria in the close log line so the user can check them.
+4. `bash $T close <id> "<one line: what was built and any decision made>"`. Never push or open a PR — the user publishes.
 5. Add anything newly learned about the codebase to `.claude/project-context.md` (one line per fact, keep it under ~60 lines).
 
 ## Phases

@@ -49,7 +49,7 @@ fi
 
 # Kit-owned hook commands, matched by script name. Used to drop the kit's previous entries
 # before merging (so upgrades never stack duplicates) and to remove them on uninstall.
-KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|verify|subagent-context)\.sh'
+KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|guard-owner|verify|subagent-context)\.sh'
 # Permission rules earlier kit versions shipped and later ones removed. A union merge would keep
 # them forever, so they're dropped from the existing settings on every install.
 RETIRED='["Read(//home/**)","Bash(git diff:*)","Bash(git log:*)","Bash(git status:*)","Bash(npx playwright test:*)","Bash(npx playwright test -c .claude/verify.playwright.config.mjs:*)","Bash(npx next lint:*)"]'
@@ -68,7 +68,7 @@ if [ "$UNINSTALL" = 1 ]; then
   printf '\nRemoving next-workflow from %s\n\n' "$DEST"
   run "rm -rf '$DEST/commands/next' '$DEST/skills/nextjs-app-router' '$DEST/skills/react-component-conventions' '$DEST/skills/code-conventions'"
   run "rm -f '$DEST/agents/'next-*.md '$DEST/next-workflow.version' '$DEST/verify.playwright.config.mjs'"
-  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets verify verify-browser run-tasks repo-map subagent-context; do
+  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets guard-owner verify verify-browser run-tasks repo-map subagent-context; do
     run "rm -f '$DEST/hooks/$h.sh'"
   done
   if [ -f "$DEST/settings.json" ] && command -v jq >/dev/null 2>&1; then
@@ -103,7 +103,7 @@ run "chmod +x '$DEST/hooks/'*.sh"
 say "agents:   $(ls "$KIT/.claude/agents" | wc -l) files"
 say "commands: /next:$(ls "$KIT/.claude/commands/next" | sed 's/\.md$//' | tr '\n' ' ' | sed 's/ /, \/next:/g; s/, \/next:$//')"
 say "skills:   nextjs-app-router, react-component-conventions, code-conventions (+ $(cat "$KIT/.claude/skills/"*/references/* /dev/null | wc -l | tr -d ' ') lines of references)"
-say "hooks:    session-context, post-edit (guard-rsc, guard-component, guard-styles, format), bash-guard, guard-secrets, verify"
+say "hooks:    session-context, post-edit (guard-rsc, guard-component, guard-styles, format), bash-guard, guard-secrets, guard-owner, verify"
 say "helpers:  stack.sh (detection, cached), tasks.sh (task bookkeeping), run-tasks.sh (headless runner)"
 say "version:  $VERSION"
 
@@ -169,10 +169,9 @@ Done. In that project, start Claude Code and run:
 
     /next:setup                        detect the stack, seed the project memory (once)
 
-Plan, approve, build:
+Plan, build:
 
-    /next:write-task <what you want>   planner (Opus) writes draft task files
-    bash .claude/hooks/tasks.sh approve all      after you've read them
+    /next:write-task <what you want>   planner (Opus) writes task files, ready to run
     /next:task                         build the next task (Sonnet)
     /next:feature <id>                 force the full phased build on one task
 

@@ -10,6 +10,10 @@ TMP="$(mktemp -d)"
 # NEXT_WF_TEST_KEEP=1 leaves the fixture project behind for inspection.
 if [ "${NEXT_WF_TEST_KEEP:-0}" = 1 ]; then trap 'printf "\nfixture kept: %s\n" "$TMP"' EXIT
 else trap 'rm -rf "$TMP"' EXIT; fi
+# The suite stands in for the user's terminal, not a Claude Code session (approve/accept refuse there).
+unset CLAUDECODE
+# Groups written before the verdict gate close tasks directly; the gate has its own group below.
+export NEXT_WF_REQUIRE_VERDICT=off
 
 ok()   { PASS=$((PASS+1)); printf '  \033[32m✓\033[0m %s\n' "$1"; }
 bad()  { FAIL=$((FAIL+1)); printf '  \033[31m✗\033[0m %s\n' "$1"; [ "$VERBOSE" = 1 ] && [ -n "${2:-}" ] && printf '      %s\n' "$2"; }
@@ -255,15 +259,16 @@ CLAUDE_PROJECT_DIR="$LG" bash "$T" migrate >/dev/null 2>&1; assert_eq "migrate t
 NT="$TMP/notes"; mkdir -p "$NT/tasks"; printf '{"dependencies":{"next":"16.0.0"}}' > "$NT/package.json"; printf 'my notes\n' > "$NT/tasks/plan.md"
 assert_eq "a user's own ./tasks folder is not taken over" "$(CLAUDE_PROJECT_DIR="$NT" bash "$T" dir)" ".claude/tasks"
 
-# tasks.sh new: drafts written by the helper (Claude Code prompts on every Write/Edit under .claude/)
+# tasks.sh new: tasks written by the helper (Claude Code prompts on every Write/Edit under .claude/)
 NW="$TMP/newtask"; mkdir -p "$NW"; printf '{"dependencies":{"next":"16.0.0"}}' > "$NW/package.json"; touch "$NW/artisan"
 nw() { CLAUDE_PROJECT_DIR="$NW" bash "$T" new "$@" >/dev/null 2>&1; echo $?; }
-assert_eq "new writes a draft" "$(printf -- '---\nid: 001\ntitle: Footer\nstatus: draft\n---\n' | nw 001-add-footer)" "0"
+assert_eq "new writes a todo task" "$(printf -- '---\nid: 001\ntitle: Footer\nstatus: todo\n---\n' | nw 001-add-footer)" "0"
 [ -f "$NW/.claude/tasks/001-add-footer.md" ] && ok "new writes into .claude/tasks" || bad "new writes into .claude/tasks"
-assert_eq "new refuses an existing id" "$(printf -- '---\nid: 001\nstatus: draft\n---\n' | nw 001-dup)" "1"
-assert_eq "new refuses a non-draft" "$(printf -- '---\nid: 002\nstatus: todo\n---\n' | nw 002-x)" "1"
-assert_eq "new refuses a mismatched id" "$(printf -- '---\nid: 003\nstatus: draft\n---\n' | nw 002-x)" "1"
-assert_eq "new refuses a path in the name" "$(printf -- '---\nid: 002\nstatus: draft\n---\n' | nw '002-../../evil')" "1"
+assert_contains "the new task is runnable" "$(CLAUDE_PROJECT_DIR="$NW" bash "$T" next)" "001-add-footer.md"
+assert_eq "new refuses an existing id" "$(printf -- '---\nid: 001\nstatus: todo\n---\n' | nw 001-dup)" "1"
+assert_eq "new refuses another status" "$(printf -- '---\nid: 002\nstatus: done\n---\n' | nw 002-x)" "1"
+assert_eq "new refuses a mismatched id" "$(printf -- '---\nid: 003\nstatus: todo\n---\n' | nw 002-x)" "1"
+assert_eq "new refuses a path in the name" "$(printf -- '---\nid: 002\nstatus: todo\n---\n' | nw '002-../../evil')" "1"
 assert_eq "new refuses text without frontmatter" "$(printf 'notes\n' | nw 002-notes)" "1"
 
 # --- 7b. models and command wiring -------------------------------------------
@@ -468,16 +473,13 @@ assert_contains "only the new error is shown" "$O" "new problem"
 assert_absent "the baselined error is not shown" "$O" "old problem"
 assert_contains "agents may not baseline their own errors" "$(cat "$KIT/.claude/settings.json")" "verify.sh --baseline"
 
-group "tasks: drafts, diff, checkpoint, undo, metrics (L6, H4, M7)"
+group "tasks: diff, checkpoint, undo, metrics (L6, H4, M7)"
 R="$TMP/r"; newproj "$R"
 ( cd "$R" && git init -q && git config user.email t@t && git config user.name t && printf '.claude/.cache/\n' > .gitignore && git add -A && git commit -qm init )
 export CLAUDE_PROJECT_DIR="$R"
 bash "$H/tasks.sh" init >/dev/null
-printf -- '---\nid: 001\ntitle: Add footer\nstatus: draft\nsize: small\n---\n## Acceptance\n- [ ] [review] x\n' > "$R/.claude/tasks/001-footer.md"
-assert_contains "next skips drafts" "$(bash "$H/tasks.sh" next)" "no runnable task"
-bash "$H/tasks.sh" start 001 >/dev/null 2>&1; RC=$?
-assert_eq "start refuses a draft" "$RC" "1"
-assert_contains "approve moves draft to todo" "$(bash "$H/tasks.sh" approve all)" "approved 1"
+printf -- '---\nid: 001\ntitle: Add footer\nstatus: todo\nsize: small\n---\n## Acceptance\n- [ ] [review] x\n' > "$R/.claude/tasks/001-footer.md"
+assert_contains "next finds the todo task" "$(bash "$H/tasks.sh" next)" "001-footer.md"
 bash "$H/tasks.sh" start 001 >/dev/null
 printf 'export const Footer = () => null\n' > "$R/footer.tsx"
 assert_contains "diff shows the task's new files" "$(bash "$H/tasks.sh" diff 001)" "footer.tsx"
@@ -502,11 +504,11 @@ O="$(printf '{"tool_input":{"command":"ls"}}' | bash "$H/bash-guard.sh" 2>&1)"; 
 assert_eq "silent when the command changed nothing" "$RC$O" "0"
 
 group "headless runner (H3)"
-printf -- '---\nid: 002\ntitle: Second\nstatus: draft\n---\n' > "$R/.claude/tasks/002-second.md"
+printf -- '---\nid: 002\ntitle: Second\nstatus: todo\n---\n' > "$R/.claude/tasks/002-second.md"
 O="$(bash "$H/run-tasks.sh" --dry-run 2>&1)"
 assert_contains "runner plans the next task in a fresh session" "$O" '/next:task 001 headless'
 O="$(bash "$H/run-tasks.sh" --dry-run 002 2>&1)"
-assert_contains "runner stops at an unapproved draft" "$O" "is a draft"
+assert_contains "runner runs a freshly planned task" "$O" '/next:task 002 headless'
 assert_contains "task.md caps in-session batches" "$(cat "$KIT/.claude/commands/next/task.md")" "at most 3"
 assert_contains "task.md has a headless mode" "$(cat "$KIT/.claude/commands/next/task.md")" "headless"
 unset CLAUDE_PROJECT_DIR
@@ -519,7 +521,8 @@ assert_absent "verifier cannot edit" "$(sed -n '1,6p' "$VF")" "Edit"
 assert_contains "task runner delegates to the verifier" "$(cat "$KIT/.claude/commands/next/task.md")" "next-verifier"
 assert_contains "feature delegates to the verifier" "$(cat "$KIT/.claude/commands/next/feature.md")" "next-verifier"
 assert_contains "planner tags acceptance criteria" "$(cat "$KIT/.claude/commands/next/write-task.md")" "[browser]"
-assert_contains "planner writes drafts" "$(cat "$KIT/.claude/commands/next/write-task.md")" "status: draft"
+assert_contains "planner writes runnable tasks" "$(cat "$KIT/.claude/commands/next/write-task.md")" "status: todo"
+assert_absent "planner has no approval step" "$(cat "$KIT/.claude/commands/next/write-task.md")" "tasks.sh approve"
 assert_absent "a11y auditor has no shell" "$(sed -n '1,6p' "$KIT/.claude/agents/next-a11y-auditor.md")" "Bash"
 assert_absent "ui-builder doesn't re-detect Tailwind" "$(cat "$KIT/.claude/agents/next-ui-builder.md")" "node -p"
 assert_absent "setup no longer copies the stack into CLAUDE.md" "$(cat "$KIT/.claude/commands/next/setup.md")" "the stack line ("
@@ -838,6 +841,52 @@ assert_contains "context is re-injected after compaction" "$SET" "compact"
 assert_contains "SubagentStart is scoped to kit agents" "$SET" '^(next-.*)$'
 L1="$(CLAUDE_PROJECT_DIR="$P" bash "$H/session-context.sh" | jq -r .hookSpecificOutput.additionalContext | wc -c)"
 [ "$L1" -lt 9000 ] && ok "session context stays under the 10,000-char hook cap ($L1)" || bad "session context stays under the 10,000-char hook cap ($L1)"
+
+group "owner steps: verdict gate, no push"
+V="$TMP/gate"; mkdir -p "$V"
+printf '{"dependencies":{"next":"15.1.0"}}' > "$V/package.json"
+( cd "$V" && git init -q && git config user.email t@t && git config user.name t && echo a > a.txt && git add . && git commit -qm init )
+CLAUDE_PROJECT_DIR="$V" bash "$H/tasks.sh" init >/dev/null 2>&1
+mkt() { printf -- '---\nid: %s\ntitle: %s\nstatus: %s\ndepends: %s\n---\n\n## Acceptance\n- [ ] %s\n\n## Log\n' "$1" "$2" "$3" "${5:-}" "$4" > "$V/.claude/tasks/$1-t.md"; }
+gt() { CLAUDE_PROJECT_DIR="$V" NEXT_WF_REQUIRE_VERDICT=on bash "$H/tasks.sh" "$@" 2>&1; }
+mkt 101 First todo "[browser] it shows"
+mkt 102 Second todo "[browser] it shows" 101
+CLAUDECODE=1 gt start 101 >/dev/null; echo b > "$V/b.txt"
+assert_contains "Claude can start a planned task" "$(gt show 101)" "status: doing"
+assert_contains "close refuses without a verdict" "$(gt close 101 built)" "no verdict recorded"
+assert_contains "and the task is still doing" "$(gt show 101)" "status: doing"
+gt verdict 101 FAIL 1 >/dev/null
+assert_contains "close refuses after FAIL" "$(gt close 101 built)" "FAIL"
+gt verdict 101 SKIPPED 2 >/dev/null
+assert_contains "SKIPPED needs can-skip-verify's yes" "$(gt close 101 built)" "can-skip-verify"
+gt verdict 101 UNVERIFIED 2 >/dev/null
+gt close 101 'built; UNVERIFIED [browser]: it shows' >/dev/null
+assert_contains "UNVERIFIED closes to done" "$(gt show 101)" "status: done"
+assert_contains "and the log names what to check" "$(gt show 101)" "UNVERIFIED [browser]: it shows"
+assert_contains "then the dependent runs" "$(gt next)" "102-t.md"
+gt start 102 >/dev/null; gt verdict 102 PASS 1 >/dev/null; gt close 102 "built it" >/dev/null
+assert_contains "PASS closes to done" "$(gt show 102)" "status: done"
+mkt 103 Third todo "[review] it reads well"
+gt start 103 >/dev/null; echo c >> "$V/a.txt"
+gt can-skip-verify 103 >/dev/null; gt verdict 103 SKIPPED 1 >/dev/null; gt close 103 tiny >/dev/null
+assert_contains "an allowed SKIPPED closes" "$(gt show 103)" "status: done"
+own() { printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$1" | jq -Rs .)" | bash "$H/guard-owner.sh" >/dev/null 2>&1; echo $?; }
+for c in 'git push' 'git push origin main' 'cd app && git -C .. push -u origin x' '"git" push' '/usr/bin/git push' 'git -c a=b push' 'gh pr create --fill' 'gh pr merge 3' \
+         "sed -i 's/status: todo/status: done/' .claude/tasks/001-x.md" 'echo status: todo > .claude/tasks/001-x.md' \
+         'sudo -u x git push' 'timeout 30 git push' 'sh -c "git push"' "$(printf "bash <<'EOF'\ngit push\nEOF")" \
+         "$(printf "cat <<EOF > f\nx\nEOF\ngit push")"; do
+  assert_eq "owner guard blocks: $c" "$(own "$c")" "2"
+done
+for c in 'git status' 'git commit -m "push the fix"' 'echo push' 'gh pr view' 'git log --oneline | head' \
+         'git commit -m "close the task, then git push"' 'bash .claude/hooks/tasks.sh start 001' \
+         "$(printf "python3 - <<'PY'\ngit push\nPY")" \
+         'bash .claude/hooks/tasks.sh close 001 "done"' 'grep -n status: .claude/tasks/001-x.md' \
+         "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'TASK'\n---\nstatus: todo\n---\nsee .claude/tasks/ > x\nTASK")"; do
+  assert_eq "owner guard allows: ${c%%$'\n'*}" "$(own "$c")" "0"
+done
+assert_eq "NEXT_WF_ALLOW_PUSH=1 reopens pushing" "$(NEXT_WF_ALLOW_PUSH=1 own 'git push')" "0"
+assert_contains "the owner guard is registered before Bash runs" "$(cat "$KIT/.claude/settings.json")" "guard-owner.sh"
+assert_contains "the installer knows the owner guard" "$(cat "$KIT/install.sh")" "guard-owner"
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

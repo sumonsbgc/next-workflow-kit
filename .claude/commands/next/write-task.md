@@ -42,13 +42,13 @@ Don't over-split: a page together with its own loading/error states and the one 
 
 ## 5. Write the files
 
-For each task: `id="$(bash $T nextid)"`, then create it with `bash $T new <id>-<kebab-title> <<'TASK'` … `TASK` — the whole file on stdin, in exactly the shape of `<dir>/TEMPLATE.md` (`<dir>` is what `bash $T dir` prints, `.claude/tasks` unless overridden). Don't use the Write tool for new task files: the folder is under `.claude/`, where Claude Code asks the user to approve every Write/Edit; `new` writes it without a prompt and refuses anything that isn't a well-formed draft. To revise a draft the user commented on, Edit is fine.
+For each task: `id="$(bash $T nextid)"`, then create it with `bash $T new <id>-<kebab-title> <<'TASK'` … `TASK` — the whole file on stdin, in exactly the shape of `<dir>/TEMPLATE.md` (`<dir>` is what `bash $T dir` prints, `.claude/tasks` unless overridden). Don't use the Write tool for new task files: the folder is under `.claude/`, where Claude Code asks the user to approve every Write/Edit; `new` writes it without a prompt and refuses anything that isn't a well-formed task. To revise a task the user commented on, Edit is fine.
 
 ```
 ---
 id: <id>
 title: <short imperative title>
-status: draft
+status: todo
 depends: <ids, or blank>
 size: small | large
 ---
@@ -67,14 +67,13 @@ size: small | large
   Example: `- [ ] [test] Archiving a project the user doesn't own returns an error and changes nothing`
 - **Notes** — decisions you made, constraints, where things should live if the context file doesn't already say, and an explicit **Out of scope** line.
 
-Create the next task only after `new` succeeded for the previous one, so `nextid` advances. Every task is written as `status: draft` — nothing runs until the user has read it and approved it.
+Create the next task only after `new` succeeded for the previous one, so `nextid` advances. Every task is written as `status: todo`, ready to run.
 
 ## Report
 
 A short table — id, title, size, depends — then the next steps, exactly:
 
-1. Read the drafts in `.claude/tasks/` and edit anything you disagree with.
-2. `bash .claude/hooks/tasks.sh approve all` (or `approve <id>`).
-3. `/next:task` for one at a time, or `bash .claude/hooks/run-tasks.sh --checkpoint` for a batch with fresh context per task.
+1. Optionally read the tasks in `.claude/tasks/` and edit anything you disagree with.
+2. `/next:task` for one at a time, or `bash .claude/hooks/run-tasks.sh --checkpoint` for a batch with fresh context per task.
 
 Nothing else.

@@ -14,8 +14,8 @@ Wire this Next.js agentic workflow into the current project. Run once per projec
    ```
    <!-- next-workflow:start -->
    This project uses next-workflow. The stack and verify commands are reported at session start;
-   repo conventions are in .claude/project-context.md. Plan with /next:write-task, approve drafts with
-   `bash .claude/hooks/tasks.sh approve`, build with /next:task (batches: .claude/hooks/run-tasks.sh).
+   repo conventions are in .claude/project-context.md. Plan with /next:write-task, build with
+   /next:task (batches: .claude/hooks/run-tasks.sh).
    <!-- next-workflow:end -->
    ```
 4. If `package.json` has no `typecheck` script and the project is TypeScript, add `"typecheck": "tsc --noEmit --incremental --tsBuildInfoFile .claude/.cache/tsbuildinfo"`. Do not touch other scripts.

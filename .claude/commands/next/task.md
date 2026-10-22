@@ -57,7 +57,7 @@ Load the reference, not the whole skill, when the reference is what you need.
 6. **Verify** — see below.
 7. **Get an independent verdict — never skipped.** `close` refuses until a verdict is recorded. First run `bash $T can-skip-verify <id>`.
    - It says `yes` (every criterion is `[review]` and the diff is 20 lines or fewer): check the list yourself, item by item, and record `bash $T verdict <id> SKIPPED`.
-   - Otherwise delegate to `next-verifier` with just the task id. It reads the task and `bash $T diff <id>` itself, and never sees your reasoning. That's the point. After **every** verifier round, record it with `bash $T verdict <id> PASS|FAIL|UNVERIFIED <round>` (`PASS WITH UNVERIFIED` → `UNVERIFIED`).
+   - Otherwise delegate to `next-verifier` with just the task id. It reads the task and `bash $T diff <id>` itself, and never sees your reasoning. That's the point. After **every** verifier round, record it with `bash $T verdict <id> PASS|FAIL|UNVERIFIED <round>` (`PASS WITH UNVERIFIED` → `UNVERIFIED`). For a `FAIL`, add what failed in a few words after the round, for example `bash $T verdict 004 FAIL 1 "search was case-sensitive"`. The session report shows recent failures, so later tasks don't repeat them.
    - `FAIL` → fix exactly what it lists, re-verify. After two failed rounds, `bash $T block <id> "<the failing criteria>"` and stop.
    - `PASS WITH UNVERIFIED` → close, and name the unverified `[browser]` criteria in the log line so the user can check them.
 8. **Close it.** `bash $T close <id> "<one line: what you did and any decision you made>"`.
@@ -100,7 +100,7 @@ Use the exact commands from the session-start report. Fix what fails before clos
 Every task in one conversation means context grows with each one, and by the fifth task details get compacted away and quality drops. So in-session batches are capped:
 
 - Run **at most 3** runnable tasks this way: `bash $T next` → run it fully → close it → repeat.
-- If more remain, stop and tell the user to run the rest with fresh context per task: `bash .claude/hooks/run-tasks.sh` (add `--checkpoint` for one local commit per task, so any single task can be undone with `bash $T undo <id>`).
+- If more remain, stop and tell the user to run the rest with fresh context per task: `bash <Kit helpers>/run-tasks.sh` (add `--checkpoint` for one local commit per task, so any single task can be undone with `bash $T undo <id>`).
 - Stop early if a task ends `blocked`, verification fails in a way you cannot fix, or a task needs a decision only the user can make. Report which tasks completed and which is stuck.
 - Run the **full** verification (typecheck, lint, tests, build) once at the end of the batch, not after every task.
 
@@ -109,7 +109,7 @@ Every task in one conversation means context grows with each one, and by the fif
 Before finishing, update `.claude/project-context.md` with anything you had to discover that isn't already there: where a kind of file lives, what a helper is called, a convention you inferred, a decision you made and why, a gotcha that cost you time.
 
 - One line per fact, under the right heading. No narrative, no history.
-- **Prune while you are there.** If the file is over ~60 lines, merge duplicates and delete what is now obvious from the code. It is injected into every session, so every line costs tokens forever.
+- **Prune while you are there.** If the file is over ~60 lines, run `bash $T compact-context` first (it drops exact duplicates and empty sections, and merges repeated headings), then merge what still says the same thing twice and delete what is now obvious from the code. It is injected into every session, so every line costs tokens forever.
 - Do not record what the stack report already detects, or what a task file already says.
 
 ## Report

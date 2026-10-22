@@ -7,7 +7,7 @@
 #
 #   evals/run.sh                       3 runs on the Next 15 fixture (network + real spend)
 #   evals/run.sh --runs 5              more runs: tighter numbers
-#   evals/run.sh --next 16             the Next 16.4 + cacheComponents variant
+#   evals/run.sh --next 16             the Next 16.4 + cacheComponents variant (--reference works too)
 #   evals/run.sh --budget 3            per-task spending cap in USD (default 5)
 #   evals/run.sh --keep                keep the work directories for inspection
 #   evals/run.sh --dry-run             set everything up, run nothing (checks the harness wiring)
@@ -35,7 +35,6 @@ while [ $# -gt 0 ]; do
   shift
 done
 case "$NEXTV" in 15|16) ;; *) echo "--next must be 15 or 16" >&2; exit 1 ;; esac
-[ "$REF" = 1 ] && [ "$NEXTV" = 16 ] && { echo "--reference exists for the Next 15 fixture only" >&2; exit 1; }
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
 
 setup_app() { # setup_app <dir>
@@ -75,6 +74,9 @@ for r in $(seq 1 "$RUNS"); do
   if [ "$REF" = 1 ]; then
     # Stand in for a perfect agent: the reference solution, and the statuses it would leave.
     cp -R "$EVALS/reference/." "$W/"
+    # Next 16 + cacheComponents changes the page (request data inside <Suspense>) and moves the
+    # signed-out redirect into proxy.ts; everything else is the same solution.
+    [ "$NEXTV" = 16 ] && cp -R "$EVALS/reference-next16/." "$W/"
     for t in "$W"/.claude/tasks/00[1-4]-*.md; do sed -i.bak -E 's/^status:.*/status: done/' "$t" && rm -f "$t.bak"; done
     sed -i.bak -E 's/^status:.*/status: blocked/' "$W"/.claude/tasks/005-*.md && rm -f "$W"/.claude/tasks/005-*.md.bak
   else

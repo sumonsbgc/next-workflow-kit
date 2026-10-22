@@ -7,6 +7,12 @@
 #   ./install.sh . --dry-run
 #   ./install.sh /path/to/app --uninstall   remove the kit's files and hook entries
 #
+# Or install it as a Claude Code plugin instead (no files copied into the project; update with
+# `claude plugin update next@next-workflow`):
+#   claude plugin marketplace add /path/to/next-workflow
+#   claude plugin install next@next-workflow
+# Use one or the other in a project, not both (the plugin steps aside and says so if both exist).
+#
 # Files this kit owns are namespaced (agents/next-*, commands/next/, skills/{nextjs-app-router,react-component-conventions,code-conventions},
 # hooks/*.sh) and are overwritten on reinstall. Nothing else is touched; an existing
 # settings.json is merged, not replaced, and backed up first.
@@ -21,7 +27,7 @@ for a in "$@"; do
     --dry-run) DRY=1 ;;
     --force) FORCE=1 ;;
     --uninstall) UNINSTALL=1 ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) TARGET="$a" ;;
   esac
 done
@@ -68,7 +74,7 @@ if [ "$UNINSTALL" = 1 ]; then
   printf '\nRemoving next-workflow from %s\n\n' "$DEST"
   run "rm -rf '$DEST/commands/next' '$DEST/skills/nextjs-app-router' '$DEST/skills/react-component-conventions' '$DEST/skills/code-conventions'"
   run "rm -f '$DEST/agents/'next-*.md '$DEST/next-workflow.version' '$DEST/verify.playwright.config.mjs'"
-  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets guard-owner verify verify-browser run-tasks repo-map subagent-context; do
+  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets guard-owner guard-read allow-helpers plugin-dispatch verify verify-browser run-tasks repo-map subagent-context; do
     run "rm -f '$DEST/hooks/$h.sh'"
   done
   if [ -f "$DEST/settings.json" ] && command -v jq >/dev/null 2>&1; then
@@ -181,5 +187,10 @@ Long batches — each task in a fresh session, optional commit per task:
 
 Around the work:  /next:test  /next:review  /next:audit  /next:ship
 Numbers:          bash .claude/hooks/tasks.sh stats
+
+Optional, in your shell (Claude can't change these): NEXT_WF_VERIFY=no-browser skips Playwright
+for [browser] criteria (they stay UNVERIFIED for you to check); NEXT_WF_SKIP_VERIFY_LINES=40 lets
+tiny [review]-only tasks skip the verifier (default 20, max 60); NEXT_WF_STACK_MODE=kit|match.
+The secrets guard is a speed bump: keep production secrets out of the project folder.
 
 NEXT

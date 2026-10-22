@@ -21,6 +21,8 @@ description: Component architecture rules for this codebase — single responsib
 
 A component may still: map over a list, branch on a prop, compose classNames, and call a helper to format a value. That's rendering. It may not: fetch, validate, compute prices, apply permissions, or reach for the database.
 
+**Existing stack.** When the session report says *match the existing stack* (Redux Toolkit, RTK Query, react-query, formik, yup, antd…), read `references/existing-stacks.md` first. The project's libraries replace the **zod** and **zustand** rows above, and the rest of this file applies unchanged.
+
 ## Single responsibility
 
 - **One component, one job.** If the name needs an "and" — `UserCardAndEditModal` — it's two components.
@@ -92,6 +94,7 @@ Read the one that matches the layer you're touching:
 
 - `references/hooks.md` — when a hook is warranted, its shape, the rules of hooks, and why most `useEffect` calls shouldn't exist.
 - `references/services-and-data.md` — services vs data access, `server-only`, authorization, and where each rule belongs.
+- `references/existing-stacks.md` — working inside a Redux / RTK Query / react-query / formik + yup / antd codebase: what replaces the kit's defaults and what doesn't.
 - `references/state-and-forms.md` — the state ladder, zustand in the App Router (per-request stores, selectors), and zod forms wired to Server Actions.
 - `references/helpers-schemas-types.md` — pure helpers, validation schemas shared by form and action, types, constants and env config.
 - `references/refactor-examples.md` — a fat component pulled apart step by step.

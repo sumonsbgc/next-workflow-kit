@@ -1,8 +1,0 @@
-# Plan:
-#   - Few of commands I don't want (/next:feature, /next:route, /next:component, /next:action). I don't think they are useful for me. As I can use /next:task 001 etc.
-#   - Need a task creator. like /next:write-task description. This task creator must use high level model.
-#   - When thetask is going to implement, the low/mid level Model should be used.
-#   - and Search from skill.sh website, If you found any useful Skill, you can use it to implement the task.
-
-# First tell me, are they correct decisions? If yes, then I will implement them.
-

@@ -31,3 +31,5 @@ jobs:
           git config --global user.email ci@local
           git config --global user.name ci
           bash evals/run.sh --reference
+      - name: Reference run (Next 16 + cacheComponents)
+        run: bash evals/run.sh --reference --next 16

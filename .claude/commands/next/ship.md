@@ -4,7 +4,7 @@ argument-hint: (no arguments)
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, TodoWrite, Skill
 ---
 
-Take the current changes to a shippable state. Use the exact commands from the session-start stack report (`bash .claude/hooks/stack.sh` if you need them again).
+Take the current changes to a shippable state. Use the exact commands from the session-start stack report (`bash <Kit helpers>/stack.sh` if you need them again; the **Kit helpers** path is in the report).
 
 Run in this order, and **stop at the first failure, fix it, then restart from that step**:
 

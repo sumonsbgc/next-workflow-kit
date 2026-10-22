@@ -13,6 +13,9 @@ bash .claude/hooks/tasks.sh undo 003           revert task 003's checkpoint comm
 bash .claude/hooks/tasks.sh stats              time, cost and guard hits so far
 ```
 
+The `bash .claude/hooks/…` paths are for a project install. With `--global` they live in
+`~/.claude/hooks/`; with the plugin, the session-start report prints the folder ("Kit helpers").
+
 ## Writing a task
 
 Easiest: `/next:write-task <description>` — it asks what it needs, splits the work, and sets

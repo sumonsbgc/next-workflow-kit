@@ -74,6 +74,6 @@ Create the next task only after `new` succeeded for the previous one, so `nextid
 A short table — id, title, size, depends — then the next steps, exactly:
 
 1. Optionally read the tasks in `.claude/tasks/` and edit anything you disagree with.
-2. `/next:task` for one at a time, or `bash .claude/hooks/run-tasks.sh --checkpoint` for a batch with fresh context per task.
+2. `/next:task` for one at a time, or `bash <Kit helpers>/run-tasks.sh --checkpoint` (fill in the **Kit helpers** path from the session report) for a batch with fresh context per task.
 
 Nothing else.

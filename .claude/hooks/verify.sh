@@ -81,7 +81,7 @@ $SHOW
       FAIL="$FAIL
 --- typecheck failed ($CMD_TYPECHECK) ---
 $(printf '%s' "$OUT" | tail -n 40)
-(No baseline exists. If these errors were already in the codebase before this session, tell the user — they can record them with: bash .claude/hooks/verify.sh --baseline. Do not run that yourself.)"
+(No baseline exists. If these errors were already in the codebase before this session, tell the user — they can record them with: bash $(wf_helpers "$SELF_DIR")/verify.sh --baseline. Do not run that yourself.)"
     fi
   fi
 fi

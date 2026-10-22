@@ -1,0 +1,14 @@
+{
+	"name": "next-workflow",
+	"owner": {
+		"name": "Mohammad Sumon"
+	},
+	"description": "The next-workflow kit as a Claude Code plugin.",
+	"plugins": [
+		{
+			"name": "next",
+			"source": "./",
+			"description": "Next.js App Router workflow: task runner, verifier, guards, project memory."
+		}
+	]
+}

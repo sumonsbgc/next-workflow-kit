@@ -34,6 +34,18 @@ fi
 # looks like what it runs.
 NORM="$(printf '%s' "$CMD" | tr -d "\"'\\\\")"
 
+# The verification gate's switches belong to the user (settings env or their own shell). An
+# agent that sets one inline, or exports it, is turning off the check on its own work.
+if [[ "$NORM" =~ (^|[^A-Za-z0-9_])NEXT_WF_(REQUIRE_VERDICT|SKIP_VERIFY_LINES|VERIFY)= ]]; then
+  block "NEXT_WF_REQUIRE_VERDICT, NEXT_WF_SKIP_VERIFY_LINES and NEXT_WF_VERIFY are the user's settings. Run the command without them; if the gate is in the way, tell the user."
+fi
+
+# Recording the type-error baseline is the user's job: an agent that baselines its own errors
+# hides them. A project install also has a deny rule for this; a plugin install has only this hook.
+if [[ "$NORM" =~ verify\.sh([^A-Za-z0-9_]|$) ]] && [[ "$NORM" == *--baseline* ]]; then
+  block "verify.sh --baseline records the current type errors as accepted. Only the user runs it (in their own terminal, or with ! in the prompt)."
+fi
+
 TASKS_DIR="${NEXT_WF_TASKS_DIR:-.claude/tasks}"
 WRITES='(^|[[:space:]])(-i[^[:space:]]*|--in-place|tee|python3?|node|perl|ruby)([[:space:]]|$)|>'
 if [[ "$NORM" == *status:* ]] && [[ "$NORM" == *"${TASKS_DIR%/}/"* || "$NORM" == *tasks/* ]] && [[ "$NORM" =~ $WRITES ]]; then

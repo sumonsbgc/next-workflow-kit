@@ -8,6 +8,12 @@
 # the file another way (a variable built at runtime, a script, `grep -r` over the project). The real protection is not having production secrets in
 # the workspace, and running unattended batches in a container.
 #
+# FROZEN (2.5.0): no more bypass hardening. Ten releases of it (2.1.1–2.3.1) bought little, because
+# a shell is too expressive for a pattern guard to close. Accepted limits: names built at runtime,
+# scripts that open files themselves, recursive tools over the project. Fix false positives and
+# message bugs only. For a real boundary, keep production secrets out of the project folder, use
+# Claude Code's sandbox (/sandbox), or run unattended batches in a container.
+#
 # Allowed on purpose, because they read no secret:
 #   echo ".env*" >> .gitignore            (ignoring env files)
 #   cp .env.example .env.local           (only when the target doesn't exist yet: never overwrites)
@@ -34,6 +40,10 @@ fi
 # ".env" in a task's prose are not file accesses. Only this exact shape: one command line, a quoted
 # delimiter, and nothing after the closing delimiter.
 TQ="'"; FIRST="${CMD%%$'\n'*}"
+# A plugin install runs the helper from the plugin's own folder: accept exactly that path too.
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [[ "$FIRST" == *"bash $CLAUDE_PLUGIN_ROOT/.claude/hooks/tasks.sh new "* ]]; then
+  FIRST="${FIRST/"bash $CLAUDE_PLUGIN_ROOT/.claude/hooks/tasks.sh"/bash .claude/hooks/tasks.sh}"
+fi
 if [[ "$FIRST" =~ ^[[:space:]]*bash[[:space:]]+(~/|\./)?\.claude/hooks/tasks\.sh[[:space:]]+new[[:space:]]+[0-9]{3,}-[a-z0-9-]+[[:space:]]+\<\<[[:space:]]*($TQ([A-Za-z_]+)$TQ|\"([A-Za-z_]+)\")[[:space:]]*$ ]]; then
   TAG="${BASH_REMATCH[3]}${BASH_REMATCH[4]}"
   BODY="${CMD#*$'\n'}"; BODY="${BODY%"${BODY##*[![:space:]]}"}"   # drop trailing blank lines
@@ -160,5 +170,6 @@ KEYS="$(grep -oE '[A-Za-z0-9_./-]*(\.pem|id_rsa|id_ed25519|id_ecdsa)([^A-Za-z0-9
 [ -n "$KEYS" ] && HITS="$HITS $KEYS"
 [ -n "$HITS" ] || exit 0
 
-echo "Blocked by next-workflow: this command touches secret files ($(echo $HITS)). Env files and private keys stay out of the transcript. For variable names, run: cat .env.example (allowed; the Read tool denies every .env.* file). To create a missing .env.local, copy it from .env.example. Anything else: ask the user to run it themselves." >&2
+# set -f: a hit can be a glob (`.e*`), and echoing it unquoted would list the folder's files as "secrets".
+echo "Blocked by next-workflow: this command touches secret files ($(set -f; echo $HITS)). Env files and private keys stay out of the transcript. For variable names, run: cat .env.example (allowed; the Read tool denies every .env.* file). To create a missing .env.local, copy it from .env.example. Anything else: ask the user to run it themselves." >&2
 exit 2

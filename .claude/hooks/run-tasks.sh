@@ -98,15 +98,14 @@ while :; do
   LINE="$(printf '  %-6s %-8s %4ss  %3s turns  $%s' "$ID" "$ST" "$SECS" "$TURNS" "$COST")"
   echo "$LINE"; SUMMARY="$SUMMARY$LINE\n"
   N=$((N+1))
-  if [ "$ST" = review ]; then
-    # Built and verified as far as a machine can; tasks that depend on it wait for the user's accept.
-    echo "  task $ID needs your check (UNVERIFIED criteria in its log), then: bash .claude/hooks/tasks.sh accept $ID"
-    SUMMARY="$SUMMARY  -> $ID waits for: tasks.sh accept $ID\n"
-    continue
+  # Closed on UNVERIFIED: done, but its log names [browser] criteria only a person can check.
+  if [ "$ST" = "done" ] && sed -n '/^## Log/,$p' "$P" | tail -1 | grep -q UNVERIFIED; then
+    echo "  task $ID: check the UNVERIFIED criteria named in its log: bash $(wf_helpers "$SELF_DIR")/tasks.sh show $ID"
+    SUMMARY="$SUMMARY  -> $ID: check its UNVERIFIED criteria by hand\n"
   fi
   if [ "$ST" != "done" ]; then
     [ "$ERRFLAG" = true ] && echo "  the session ended with an error (budget or turn limit?)"
-    echo "  stopping: task $ID is '$ST'. Its log says why: bash .claude/hooks/tasks.sh show $ID"
+    echo "  stopping: task $ID is '$ST'. Its log says why: bash $(wf_helpers "$SELF_DIR")/tasks.sh show $ID"
     break
   fi
 done

@@ -8,7 +8,7 @@ You own how this Next.js app reads and writes data. Load the `nextjs-app-router`
 
 ## Security first — a Server Action is a public endpoint
 
-Every action and route handler must, in this order: authenticate the caller, authorize the specific object being touched, validate the payload with a **zod schema from `lib/validation/`** — the same one the form uses, never a second inline copy — then act. Never trust an id, role, price, quantity, or ownership field arriving from the client — derive it from the session. State explicitly in your report which check covers which threat.
+Every action and route handler must, in this order: authenticate the caller, authorize the specific object being touched, validate the payload with a **zod schema from `lib/validation/`** — the same one the form uses, never a second inline copy — then act. (If the session report says **match the existing stack**, validate with the project's library — e.g. the same yup schema the form uses — and put client data access behind its data client; see `react-component-conventions/references/existing-stacks.md`.) Never trust an id, role, price, quantity, or ownership field arriving from the client — derive it from the session. State explicitly in your report which check covers which threat.
 
 ## Method
 

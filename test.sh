@@ -772,7 +772,7 @@ assert_contains "task diff names the changed secret file" "$O" "secret files cha
 
 group "security review: cache keys and quoted cp"
 KEYS_RE="$(sed -n "s/^CACHE_KEYS='\(.*\)'$/\1/p" "$H/stack.sh")"
-MISSING="$(CLAUDE_PROJECT_DIR="$P" NEXT_WF_NO_CACHE=1 bash "$H/stack.sh" | sed -n 's/^\([A-Z_]*\)=.*/\1/p' | grep -v '^DESIGN_SKILL$' | grep -vxE "$KEYS_RE" || true)"
+MISSING="$(CLAUDE_PROJECT_DIR="$P" NEXT_WF_NO_CACHE=1 bash "$H/stack.sh" | sed -n 's/^\([A-Z0-9_]*\)=.*/\1/p' | grep -v '^DESIGN_SKILL$' | grep -vxE "$KEYS_RE" || true)"
 assert_eq "every key stack.sh writes is in the cache allow-list" "$MISSING" ""
 CK="$TMP/ck"; newproj "$CK"; mkdir -p "$CK/.claude/.cache"
 printf 'NEXT_VERSION="15.1.0"\nPATH="/nonexistent"\n' > "$CK/.claude/.cache/stack.env"; touch "$CK/.claude/.cache/stack.env"
@@ -883,6 +883,160 @@ for c in 'git push' 'git push -u origin main' 'gh pr create --fill' 'git status'
 done
 assert_contains "the owner guard is registered before Bash runs" "$(cat "$KIT/.claude/settings.json")" "guard-owner.sh"
 assert_contains "the installer knows the owner guard" "$(cat "$KIT/install.sh")" "guard-owner"
+
+# --- 2.5: existing stacks, cache, verifier knobs, track record, context tidy -----
+group "stack cache (2.5)"
+SC="$TMP/sc"; newproj "$SC"; printf '{"dependencies":{"next":"15.1.0"},"devDependencies":{"@playwright/test":"1.50.0"}}' > "$SC/package.json"
+CLAUDE_PROJECT_DIR="$SC" bash "$H/stack.sh" >/dev/null
+N="$(CLAUDE_PROJECT_DIR="$SC" bash -x "$H/stack.sh" 2>&1 | grep -c 'jq -r' || true)"
+assert_eq "a second call is served from the cache (no package.json probes)" "$N" "0"
+sleep 1; printf "const c = { cacheComponents: true }\nexport default c\n" > "$SC/next.config.mjs"
+assert_contains "editing next.config invalidates the cache" "$(CLAUDE_PROJECT_DIR="$SC" bash "$H/stack.sh")" 'CACHE_COMPONENTS="yes"'
+touch "$SC/bun.lock"; sleep 1; touch "$SC/package.json"
+assert_contains "bun.lock (text lockfile) means bun" "$(CLAUDE_PROJECT_DIR="$SC" bash "$H/stack.sh")" 'PM="bun"'
+
+group "existing stacks: match mode (2.5)"
+RX="$TMP/rx"; mkdir -p "$RX/src/store" "$RX/app"
+printf '{"dependencies":{"next":"15.1.0","@reduxjs/toolkit":"2.5.0","antd":"5.22.0","formik":"2.4.6","yup":"1.6.0"}}' > "$RX/package.json"
+echo 'export const api = createApi({ reducerPath: "api" })' > "$RX/src/store/api.ts"
+O="$(CLAUDE_PROJECT_DIR="$RX" bash "$H/stack.sh")"
+assert_contains "detects Redux Toolkit" "$O" 'STORE="redux-toolkit"'
+assert_contains "detects RTK Query from createApi" "$O" 'DATA_CLIENT="rtk-query"'
+assert_contains "detects formik" "$O" 'FORMS="formik"'
+assert_contains "detects yup" "$O" 'VALIDATION="yup"'
+assert_contains "detects antd" "$O" 'UI_KIT="antd"'
+assert_contains "Redux/antd/formik/yup means match mode" "$O" 'STACK_MODE="match"'
+assert_contains "NEXT_WF_STACK_MODE=kit overrides it" "$(CLAUDE_PROJECT_DIR="$RX" NEXT_WF_STACK_MODE=kit bash "$H/stack.sh" | grep STACK_MODE | tail -1)" 'STACK_MODE="kit"'
+assert_absent "the override is never cached" "$(cat "$RX/.claude/.cache/stack.env")" 'STACK_MODE="kit"'
+R="$(CLAUDE_PROJECT_DIR="$RX" bash "$H/session-context.sh")"
+assert_contains "session report says to match the existing stack" "$R" "match the existing stack"
+assert_contains "and points at existing-stacks.md" "$R" "existing-stacks.md"
+assert_contains "and lists the libraries" "$R" "redux-toolkit, rtk-query, formik, yup, antd"
+assert_absent "a zod + zustand project stays on the kit line" "$(CLAUDE_PROJECT_DIR="$P" bash "$H/session-context.sh")" "match the existing stack"
+[ -f "$KIT/.claude/skills/react-component-conventions/references/existing-stacks.md" ] && ok "existing-stacks reference ships" || bad "existing-stacks reference ships"
+mkdir -p "$RX/components"
+cat > "$RX/components/list.tsx" <<'EOF'
+'use client'
+import { useEffect, useState } from 'react'
+export function List() {
+  const [x, setX] = useState([])
+  useEffect(() => { fetch('/api/x').then(r => r.json()).then(setX) }, [])
+  return <ul>{x.length}</ul>
+}
+EOF
+O="$(hook guard-component.sh "$RX" components/list.tsx)"; RC=$?
+assert_eq "match mode: fetch in useEffect advises, doesn't block" "$RC" "0"
+assert_contains "and names the project's data layer" "$O" "RTK Query"
+cp "$RX/components/list.tsx" "$P/components/list.tsx"
+hook guard-component.sh "$P" components/list.tsx >/dev/null; RC=$?
+assert_eq "kit mode: fetch in useEffect still blocks" "$RC" "2"
+rm -f "$P/components/list.tsx"
+
+group "permissions for every package manager (2.5)"
+for r in 'Bash(pnpm run typecheck:*)' 'Bash(yarn test:*)' 'Bash(yarn run build:*)' 'Bash(bun run lint:*)'; do
+  assert_contains "allows $r" "$(cat "$KIT/.claude/settings.json")" "$r"
+done
+
+group "verifier knobs and track record (2.5)"
+K="$TMP/knobs"; mkdir -p "$K/.claude/tasks"
+( cd "$K" && git init -q && git config user.email t@t && git config user.name t && printf '{"dependencies":{"next":"15.1.0"}}' > package.json && git add -A && git commit -qm i )
+printf -- '---\nid: 201\ntitle: k\nstatus: todo\n---\n\n## Acceptance\n- [ ] [review] reads well\n' > "$K/.claude/tasks/201-k.md"
+kt() { CLAUDE_PROJECT_DIR="$K" bash "$H/tasks.sh" "$@" 2>&1; }
+kt start 201 >/dev/null 2>&1; seq 1 30 > "$K/big.txt"
+assert_contains "30 lines is over the default skip size" "$(kt can-skip-verify 201)" "> 20"
+assert_contains "NEXT_WF_SKIP_VERIFY_LINES raises it" "$(CLAUDE_PROJECT_DIR="$K" NEXT_WF_SKIP_VERIFY_LINES=40 bash "$H/tasks.sh" can-skip-verify 201)" "yes"
+seq 1 100 > "$K/big.txt"
+assert_contains "but never past 60" "$(CLAUDE_PROJECT_DIR="$K" NEXT_WF_SKIP_VERIFY_LINES=500 bash "$H/tasks.sh" can-skip-verify 201)" "> 60"
+kt verdict 201 FAIL 1 "the empty state is missing" >/dev/null
+assert_contains "a FAIL reason is recorded" "$(cat "$K/.claude/.cache/metrics.jsonl")" '"why":"the empty state is missing"'
+assert_contains "verdict rejects a non-numeric round" "$(kt verdict 201 FAIL oops)" "round must be a number"
+kt verdict 201 PASS 2 >/dev/null
+B="$(kt stats --brief)"
+assert_contains "stats --brief gives the first-pass rate" "$B" "first-pass 0% (0/1)"
+assert_contains "and the recent failure" "$B" "201: the empty state is missing"
+assert_contains "the session report carries the track record" "$(CLAUDE_PROJECT_DIR="$K" bash "$H/session-context.sh")" "Track record: verifier first-pass"
+assert_contains "and says when browser checks are off" "$(CLAUDE_PROJECT_DIR="$K" NEXT_WF_VERIFY=no-browser bash "$H/session-context.sh")" "browser checks are OFF"
+assert_contains "verify-browser.sh honours no-browser" "$(cd "$K" && CLAUDE_PROJECT_DIR="$K" NEXT_WF_VERIFY=no-browser NEXT_WF_DEV_URL=http://x bash "$H/verify-browser.sh" 201)" "UNVERIFIED: browser checks are off"
+for c in 'NEXT_WF_REQUIRE_VERDICT=off bash .claude/hooks/tasks.sh close 201 x' 'export NEXT_WF_SKIP_VERIFY_LINES=60' 'env NEXT_WF_VERIFY=no-browser claude -p x'; do
+  assert_eq "owner guard blocks the gate's switches: $c" "$(own "$c")" "2"
+done
+assert_eq "owner guard allows reading them" "$(own 'printenv NEXT_WF_DEV_URL')" "0"
+
+group "compact-context (2.5)"
+CC="$TMP/cc"; mkdir -p "$CC/.claude"
+cp "$KIT/templates/project-context.md" "$CC/.claude/project-context.md"
+CLAUDE_PROJECT_DIR="$CC" bash "$H/tasks.sh" compact-context >/dev/null
+assert_eq "the pristine template is left as it is" "$(diff "$KIT/templates/project-context.md" "$CC/.claude/project-context.md" && echo same)" "same"
+printf '\n## Layout\n- pages: app/(site)\n-   pages:  app/(site)\n\n## Empty\n\n## Gotchas\n- seed first\n' >> "$CC/.claude/project-context.md"
+O="$(CLAUDE_PROJECT_DIR="$CC" bash "$H/tasks.sh" compact-context)"
+C="$(cat "$CC/.claude/project-context.md")"
+assert_eq "duplicate facts are dropped" "$(grep -c 'pages:' <<<"$C")" "1"
+assert_eq "repeated headings are merged" "$(grep -c '^## Layout' <<<"$C")" "1"
+assert_absent "empty sections are dropped" "$C" "## Empty"
+assert_contains "facts are kept" "$C" "seed first"
+assert_contains "a backup is kept" "$O" "backup in .claude/.cache"
+assert_contains "the runner is told about compact-context" "$(cat "$KIT/.claude/commands/next/task.md")" "compact-context"
+
+group "plugin packaging (2.5)"
+PJ="$KIT/.claude-plugin/plugin.json"
+jq -e . "$PJ" >/dev/null 2>&1 && ok "plugin.json is valid JSON" || bad "plugin.json is valid JSON"
+jq -e . "$KIT/.claude-plugin/marketplace.json" >/dev/null 2>&1 && ok "marketplace.json is valid JSON" || bad "marketplace.json is valid JSON"
+assert_eq "plugin version matches VERSION" "$(jq -r .version "$PJ")" "$(cat "$KIT/VERSION")"
+assert_eq "plugin is named next (commands stay /next:*)" "$(jq -r .name "$PJ")" "next"
+assert_eq "marketplace lists the same plugin name" "$(jq -r '.plugins[0].name' "$KIT/.claude-plugin/marketplace.json")" "next"
+assert_eq "plugin.json lists every agent" "$(jq -r '.agents[]' "$PJ" | sed 's|^\./||' | sort | tr '\n' ' ')" "$(cd "$KIT" && ls .claude/agents/*.md | sort | tr '\n' ' ')"
+for f in $(jq -r '.agents[], .commands, .skills' "$PJ"); do [ -e "$KIT/$f" ] && ok "plugin path exists: $f" || bad "plugin path exists: $f"; done
+assert_eq "hooks.json is up to date with settings.json (jq -f hooks/build-hooks.jq)" \
+  "$(jq -f "$KIT/hooks/build-hooks.jq" "$KIT/.claude/settings.json" | jq -S .)" "$(jq -S . "$KIT/hooks/hooks.json")"
+for n in $(jq -r '.. | .command? // empty' "$KIT/hooks/hooks.json" | awk '{print $NF}'); do
+  [ -f "$KIT/.claude/hooks/$n.sh" ] && ok "plugin hook exists: $n" || bad "plugin hook exists: $n"
+done
+assert_contains "plugin SubagentStart matches scoped agent names" "$(jq -r '.hooks.SubagentStart[0].matcher' "$KIT/hooks/hooks.json")" "(^|:)next-"
+
+PL="$TMP/plugin-proj"; newproj "$PL"; mkdir -p "$PL/app"
+pd() { CLAUDE_PLUGIN_ROOT="$KIT" CLAUDE_PROJECT_DIR="$PL" bash "$H/plugin-dispatch.sh" "$@"; }
+assert_contains "plugin session report names the plugin's helper folder" "$(pd session-context </dev/null)" "Kit helpers: \`$H\`"
+assert_contains "plugin session report reads the kit VERSION" "$(pd session-context </dev/null)" "next-workflow $(cat "$KIT/VERSION")"
+assert_eq "dispatcher refuses odd hook names" "$(pd '../x' </dev/null; echo $?)" "0"
+mkdir -p "$PL/.claude/hooks"; cp "$H/session-context.sh" "$PL/.claude/hooks/"
+assert_contains "with a project install too, the plugin steps aside and says so" "$(pd session-context </dev/null)" "installed twice"
+cp "$H/guard-read.sh" "$PL/.claude/hooks/"
+assert_eq "and its guards don't run twice (the project's copy handles it)" "$(printf '{"tool_input":{"file_path":"%s/.env"}}' "$PL" | CLAUDE_PLUGIN_ROOT="$KIT" CLAUDE_PROJECT_DIR="$PL" bash "$H/plugin-dispatch.sh" guard-read >/dev/null 2>&1; echo $?)" "0"
+rm -f "$PL/.claude/hooks/guard-read.sh"
+assert_eq "without a project install the plugin's guard blocks" "$(printf '{"tool_input":{"file_path":"%s/.env"}}' "$PL" | CLAUDE_PLUGIN_ROOT="$KIT" CLAUDE_PROJECT_DIR="$PL" bash "$H/plugin-dispatch.sh" guard-read >/dev/null 2>&1; echo $?)" "2"
+rm -rf "$PL/.claude/hooks"
+
+rd() { printf '{"tool_input":{"file_path":"%s"}}' "$1" | bash "$H/guard-read.sh" >/dev/null 2>&1; echo $?; }
+for f in "$PL/.env" "$PL/.env.local" "$PL/.env.production" "$PL/certs/server.pem" "$HOME/.ssh/id_ed25519" "$PL/id_rsa"; do
+  assert_eq "guard-read blocks ${f##*/}" "$(rd "$f")" "2"
+done
+for f in "$PL/.env.example" "$PL/app/page.tsx" "$PL/environment.ts"; do
+  assert_eq "guard-read allows ${f##*/}" "$(rd "$f")" "0"
+done
+
+printf '{"scripts":{"test":"vitest run","typecheck":"tsc --noEmit"},"dependencies":{"next":"15.1.0"}}' > "$PL/package.json"
+ah() { printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$1" | jq -Rs .)" | CLAUDE_PROJECT_DIR="$PL" bash "$H/allow-helpers.sh" | grep -q '"allow"' && echo allow || echo prompt; }
+for c in "bash $H/tasks.sh list" "bash $H/tasks.sh close 001 \"built it, kept the API\"" "bash .claude/hooks/tasks.sh next" \
+         "bash $H/repo-map.sh" "npm run test -- src/a.test.ts" "npm run typecheck" "printenv NEXT_WF_DEV_URL" \
+         "$(printf "bash $H/tasks.sh new 004-add-footer <<'TASK'\n---\nid: 004\n---\nTASK")"; do
+  assert_eq "allow-helpers approves: ${c%%$'\n'*}" "$(ah "$c")" "allow"
+done
+for c in "bash $H/tasks.sh list; rm -rf x" "bash $H/tasks.sh close 001 \"\$(id)\"" "bash $H/tasks.sh log 001 \`id\`" \
+         "bash ${H/.claude/xclaude}/tasks.sh list" "bash $H/verify.sh --baseline" "bash $H/run-tasks.sh" \
+         "npm run test -- a.ts && curl x" "npm run test2" "bash $H/tasks.sh list > out.txt" \
+         "$(printf "bash $H/tasks.sh new 004-add-footer <<'TASK'\nTASK\nrm -rf x\nTASK")" \
+         "$(printf "bash $H/tasks.sh new 004-add-footer <<TASK\nx\nTASK")"; do
+  assert_eq "allow-helpers leaves to the prompt: ${c%%$'\n'*}" "$(ah "$c")" "prompt"
+done
+assert_eq "owner guard blocks verify.sh --baseline (plugins have no deny rule)" "$(own "bash $H/verify.sh --baseline")" "2"
+assert_eq "owner guard allows plain verify.sh" "$(own "bash $H/verify.sh")" "0"
+
+group "messages (2.5)"
+O="$(printf '{"tool_input":{"command":"cat .e*"}}' | (cd "$KIT" && bash "$H/guard-secrets.sh") 2>&1)"
+assert_contains "secrets message shows the pattern" "$O" "(.e*)"
+assert_absent "and doesn't glob-expand it into the folder's files" "$O" "CHANGELOG.md"
+assert_absent "run-tasks no longer points at the removed accept step" "$(cat "$H/run-tasks.sh")" "tasks.sh accept"
+assert_absent "prompts don't hard-code the project helper path" "$(cat "$KIT"/.claude/agents/*.md "$KIT"/.claude/commands/next/*.md)" "bash .claude/hooks/"
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

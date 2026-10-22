@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.5.0 — 2026-10-23
+Fits existing stacks, installs as a plugin, verification you can afford, and a Next 16 baseline.
+- **Match the existing stack.** `stack.sh` now detects Redux Toolkit (and RTK Query, from `createApi`), redux, jotai, react-query, SWR, Apollo, formik, TanStack Form, yup, valibot, antd, MUI, Chakra and Mantine (new keys `DATA_CLIENT`, `UI_KIT`, `STACK_MODE`). A project built on any of them runs in `match` mode: the session report says so and points to the new `react-component-conventions/references/existing-stacks.md`, which replaces the zustand/zod/react-hook-form defaults (per-request Redux store, RTK Query endpoints, the same yup schema on the server, AntdRegistry…). The useEffect-fetch guard advises instead of blocking there. `NEXT_WF_STACK_MODE=kit|match` overrides it; the override is never cached.
+- **Plugin install.** `.claude-plugin/plugin.json` and a local marketplace: `claude plugin marketplace add <kit>` then `claude plugin install next@next-workflow`. Commands stay `/next:*`. Plugins can't ship permission rules, so the plugin adds two hooks: `allow-helpers.sh` (pre-approves exactly the helper and verify commands; anything chained or expanded still prompts, and the user's deny/ask rules always win) and `guard-read.sh` (blocks Read on env files and keys). `hooks/hooks.json` is generated from settings.json by `hooks/build-hooks.jq` (a test keeps them in sync). Every plugin hook runs through `plugin-dispatch.sh`, which steps aside when the project also has the kit's files and says so at session start. `claude plugin validate .` passes.
+- **Verifier cost, still never skipped.** `NEXT_WF_VERIFY=no-browser` stops the verifier writing Playwright specs; `[browser]` criteria are recorded UNVERIFIED for the user. `NEXT_WF_SKIP_VERIFY_LINES` raises the `[review]`-only skip size (default 20, capped at 60). The owner guard blocks Claude from setting these, `NEXT_WF_REQUIRE_VERDICT`, or running `verify.sh --baseline` itself.
+- **Track record.** `tasks.sh verdict <id> FAIL <round> "<what failed>"` records the reason; `tasks.sh stats --brief` and the session report show the verifier's first-pass rate and the last three failures, so later tasks don't repeat them.
+- **`tasks.sh compact-context`** tidies `.claude/project-context.md`: exact duplicate facts, repeated headings and empty sections. The runner calls it before pruning by hand; the over-4000-characters warning points to it.
+- **Next 16 reference solution** (`evals/reference-next16/`): request data under `<Suspense>`, signed-out redirect in `proxy.ts`. `evals/run.sh --reference --next 16` scores 5/5 against a real 16.4.1 build; CI runs it. The Next 15 page fails that build, so the variant really tests Next 16 knowledge.
+- next16.md: `redirect()` inside a streamed `<Suspense>` boundary answers HTTP 200 with a meta refresh, not a 307 (checked on a 16.4.1 production build). Auth gates belong in `proxy.ts`.
+- Permissions cover `pnpm run`, `yarn`, `yarn run` and `bun run`. The detected commands are `<pm> run <script>`, so `pnpm run typecheck` used to prompt. `bun.lock` (bun 1.2+ text lockfile) is detected.
+- Fix: the stack cache never hit. `TEST_E2E` was missing from the cache allow-list, so every hook re-ran the full detection (~19 jq calls per edit); the test that should have caught it skipped keys containing a digit. The cache is now also invalidated by lockfiles, installed next/tailwind manifests, install records and `next.config.*`.
+- Fix: the secrets guard's message glob-expanded a matched pattern, listing every file in the folder as a "secret file".
+- Fix: `run-tasks.sh` still told the user to run `tasks.sh accept`, which 2.4.0 removed.
+- Prompts no longer hard-code `.claude/hooks/`; they use the **Kit helpers** path from the session report (project, `--global` or plugin).
+- guard-secrets is **frozen**: false positives and message bugs only, no more bypass hardening. For a real boundary, keep secrets out of the project folder or use the sandbox.
+- Removed `todo.yml` (an obsolete plan).
+
 ## 2.4.0 — 2026-10-23
 Verification can't be skipped, and tasks run as soon as they are planned.
 - `tasks.sh close` refuses until a verdict is recorded for the task: PASS, UNVERIFIED, or a SKIPPED that `can-skip-verify` allowed. A FAIL must be fixed and re-verified first. `NEXT_WF_REQUIRE_VERDICT=off` turns the gate off. A task closed on UNVERIFIED is `done`, and its log line names the criteria the user should check.

@@ -26,6 +26,16 @@ wf_metric() {
   printf '%s}\n' "$line" >> "$root/.claude/.cache/metrics.jsonl" 2>/dev/null || true
 }
 
+# wf_helpers <self-dir> -> the helpers folder as Claude and the user should type it: `.claude/hooks`
+# for a project install, `~/.claude/hooks` for --global, the plugin's absolute folder for a plugin.
+wf_helpers() {
+  local root="${CLAUDE_PROJECT_DIR:-$PWD}"
+  # shellcheck disable=SC2088  # a literal "~" for display, not a path to expand
+  if [ "$1" = "$root/.claude/hooks" ]; then printf '.claude/hooks'
+  elif [ "$1" = "$HOME/.claude/hooks" ]; then printf '~/.claude/hooks'
+  else printf '%s' "$1"; fi
+}
+
 # wf_file_from_input <json> -> tool_input.file_path (empty if absent)
 wf_file_from_input() {
   if command -v jq >/dev/null 2>&1; then

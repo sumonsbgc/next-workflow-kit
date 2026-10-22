@@ -22,11 +22,15 @@
 #   tasks.sh block <id> <reason>  -> blocked, reason logged
 #   tasks.sh undo <id> [--cascade]  revert the task's checkpoint; refuses while done tasks depend on it
 #                                 unless --cascade, which undoes those dependents first (newest first)
-#   tasks.sh verdict <id> <PASS|FAIL|UNVERIFIED|SKIPPED> [round]   record a verifier result
-#   tasks.sh can-skip-verify <id> exit 0 only if every criterion is [review] and the diff is <= 20 lines
+#   tasks.sh verdict <id> <PASS|FAIL|UNVERIFIED|SKIPPED> [round] [what failed]   record a verifier result
+#   tasks.sh can-skip-verify <id> exit 0 only if every criterion is [review] and the diff is small
+#                                 (<= NEXT_WF_SKIP_VERIFY_LINES lines, default 20, at most 60)
 #   tasks.sh log <id> <text>      append a line under ## Log
 #   tasks.sh count [status]       number of tasks, for cheap status checks
-#   tasks.sh stats                cost/time/guard summary from .claude/.cache/metrics.jsonl
+#   tasks.sh stats [--brief]      cost/time/guard summary from .claude/.cache/metrics.jsonl
+#                                 (--brief: one line for the session report, recent FAIL reasons)
+#   tasks.sh compact-context      tidy .claude/project-context.md: drop duplicate lines and empty
+#                                 sections, report its size; a backup is kept in .claude/.cache
 #
 # Statuses: todo -> doing -> done | blocked.
 # A task is a .md file whose FIRST LINE is `---` (YAML frontmatter). Plans, notes and scratch
@@ -399,8 +403,12 @@ case "$CMD" in
   verdict)
     f="$(find_task "${1:?id}")" || die "no task with id $1"
     case "${2:-}" in PASS|FAIL|UNVERIFIED|SKIPPED) ;; *) die "usage: tasks.sh verdict <id> PASS|FAIL|UNVERIFIED|SKIPPED [round]" ;; esac
+    [ -z "${3:-}" ] || [[ "$3" =~ ^[0-9]+$ ]] || die "round must be a number: tasks.sh verdict <id> <result> [round] [what failed]"
     state_set "$1" verdict "$2"
-    wf_metric verdict id "$1" result "$2" round "${3:-1}"
+    # What failed, so the next session learns from it (shown by `stats --brief` in the session report).
+    WHY="$(printf '%s' "${*:4}" | tr -s '[:space:]' ' ' | cut -c1-160)"
+    if [ -n "$WHY" ]; then wf_metric verdict id "$1" result "$2" round "${3:-1}" why "$WHY"
+    else wf_metric verdict id "$1" result "$2" round "${3:-1}"; fi
     echo "verdict $1: $2 (round ${3:-1})" ;;
 
   can-skip-verify)
@@ -414,7 +422,10 @@ case "$CMD" in
     LINES="$(git -C "$ROOT" diff --numstat "$BASE" -- . ":!$TASKS_REL" ':!.claude' | awk '{a+=$1+$2} END{print a+0}')"
     NEW="$(git -C "$ROOT" ls-files --others --exclude-standard -- . ":!$TASKS_REL" ':!.claude' | while IFS= read -r p; do wc -l < "$ROOT/$p"; done | awk '{a+=$1} END{print a+0}')"
     T=$((LINES + NEW))
-    [ "$T" -le 20 ] || { echo "no: diff is $T lines (> 20)"; exit 1; }
+    # The threshold is the user's to raise (settings env or their shell), up to a hard cap: past
+    # ~60 lines a change is big enough that an unreviewed mistake is likely.
+    MAXL="${NEXT_WF_SKIP_VERIFY_LINES:-20}"; [[ "$MAXL" =~ ^[0-9]+$ ]] || MAXL=20; [ "$MAXL" -gt 60 ] && MAXL=60
+    [ "$T" -le "$MAXL" ] || { echo "no: diff is $T lines (> $MAXL)"; exit 1; }
     state_set "$1" skip_ok 1
     echo "yes: all criteria [review], diff $T lines" ;;
 
@@ -427,6 +438,20 @@ case "$CMD" in
 
   stats)
     M="$ROOT/.claude/.cache/metrics.jsonl"
+    if [ "${1:-}" = --brief ]; then
+      # One line for the session report: how verification has gone lately, and what failed.
+      [ -s "$M" ] && command -v jq >/dev/null 2>&1 || exit 0
+      tail -n 2000 "$M" | jq -rs '
+        [.[] | select(.event == "verdict")] as $v
+        | if ($v | length) == 0 then empty else
+          ([$v[] | select((.round|tostring) == "1" and .result != "SKIPPED")]) as $f
+          | ([$f[] | select(.result | startswith("PASS"))] | length) as $p
+          | ([$v[] | select(.result == "FAIL" and (.why // "") != "")] | .[-3:] | map("\(.id): \(.why)")) as $why
+          | "verifier first-pass \(if ($f|length) == 0 then "n/a" else "\(($p * 100 / ($f|length)) | floor)% (\($p)/\($f|length))" end), \([$v[] | select(.result == "FAIL")] | length) FAIL rounds, \([$v[] | select(.result == "UNVERIFIED")] | length) UNVERIFIED"
+            + (if ($why | length) > 0 then ". Recent failures, avoid repeating them: " + ($why | join("; ")) else "" end)
+          end' 2>/dev/null
+      exit 0
+    fi
     [ -f "$M" ] || { echo "(no metrics yet)"; exit 0; }
     node - "$M" <<'JS'
 const lines = require('fs').readFileSync(process.argv[2], 'utf8').split('\n').filter(Boolean)
@@ -463,5 +488,48 @@ if (g.length) {
 JS
     ;;
 
-  *) sed -n '2,36p' "$0"; exit 1 ;;
+  compact-context)
+    # Mechanical tidy only: exact duplicate lines, runs of blank lines, headings with nothing under
+    # them. Merging facts that say the same thing differently is a judgement call; the size report
+    # tells the runner when that is due.
+    CTX="$ROOT/.claude/project-context.md"
+    [ -f "$CTX" ] || die "no .claude/project-context.md, run: tasks.sh init"
+    mkdir -p "$ROOT/.claude/.cache"; cp "$CTX" "$ROOT/.claude/.cache/project-context.md.bak"
+    BEFORE="$(wc -c < "$CTX" | tr -d ' ')"
+    # Everything before the first `## ` heading is kept as it is (title, guidance comment).
+    # Sections with the same heading are merged in first-seen order; a fact seen before, ignoring
+    # bullet and spacing, is dropped; a section left with no facts and no comment is dropped.
+    awk '
+      !started && !/^## / { if (!(/^[[:space:]]*$/ && pre_blank)) print; pre_blank = /^[[:space:]]*$/; next }
+      /^## / {
+        started = 1; cur = $0
+        if (!(cur in body)) { order[++n] = cur; body[cur] = "" }
+        next
+      }
+      /^<!--/ { incomment = 1 }
+      incomment { body[cur] = body[cur] $0 "\n"; if ($0 ~ /-->/) incomment = 0; next }
+      /^[[:space:]]*$/ { next }
+      {
+        key = $0; sub(/^[[:space:]]*[-*][[:space:]]+/, "", key); gsub(/[[:space:]]+/, " ", key)
+        if (key in seen) next
+        seen[key] = 1; body[cur] = body[cur] $0 "\n"
+      }
+      END {
+        first = 1
+        for (i = 1; i <= n; i++) {
+          if (body[order[i]] == "") continue
+          if (!first || !pre_blank) print ""
+          first = 0
+          printf "%s\n\n%s", order[i], body[order[i]]
+        }
+      }
+    ' "$CTX" > "$CTX.tmp" || { rm -f "$CTX.tmp"; die "compaction failed; nothing changed"; }
+    [ -s "$CTX.tmp" ] || { rm -f "$CTX.tmp"; die "compaction produced an empty file; nothing changed"; }
+    mv "$CTX.tmp" "$CTX"
+    AFTER="$(wc -c < "$CTX" | tr -d ' ')"
+    echo "project-context.md: $BEFORE -> $AFTER characters (~$((AFTER / 4)) tokens), $(grep -cvE '^#|^[[:space:]]*$|^<!--' "$CTX") lines; backup in .claude/.cache/project-context.md.bak"
+    [ "$AFTER" -gt 4000 ] && echo "still over 4000 characters: the session report loads only the first 4000. Merge facts that say the same thing and delete what the code now makes obvious."
+    exit 0 ;;
+
+  *) sed -n '2,40p' "$0"; exit 1 ;;
 esac

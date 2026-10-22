@@ -1,0 +1,27 @@
+{
+  "name": "next",
+  "version": "2.5.0",
+  "description": "Next.js App Router workflow: plan tasks with /next:write-task, build them with /next:task, independent verification, stack-aware guards and project memory.",
+  "author": {
+    "name": "Mohammad Sumon"
+  },
+  "keywords": [
+    "nextjs",
+    "react",
+    "app-router",
+    "workflow",
+    "tasks"
+  ],
+  "commands": "./.claude/commands/next/",
+  "agents": [
+    "./.claude/agents/next-a11y-auditor.md",
+    "./.claude/agents/next-data-layer.md",
+    "./.claude/agents/next-perf-auditor.md",
+    "./.claude/agents/next-reviewer.md",
+    "./.claude/agents/next-route-builder.md",
+    "./.claude/agents/next-test-writer.md",
+    "./.claude/agents/next-ui-builder.md",
+    "./.claude/agents/next-verifier.md"
+  ],
+  "skills": "./.claude/skills/"
+}

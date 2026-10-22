@@ -59,7 +59,13 @@ fi
 FETCH_RE='(^|[^A-Za-z0-9_$])(fetch|axios|ky|got|ofetch)[.(]|[.](get|post|put|patch|delete)[(][[:space:]]*[`"'"'"'](/|https?:)'
 # ENVIRON, not -v: -v would run the regex through escape processing (and mawk lacks \<).
 if RE="$FETCH_RE" awk '/useEffect\(/{n=12} n-- > 0 && $0 ~ ENVIRON["RE"] {found=1} END{exit !found}' <<<"$BODY"; then
-  err "Data fetching inside useEffect. Fetch in a Server Component via a service and pass the data down; if it is genuinely user-triggered, use a Server Action, or move the whole effect into a hooks/use-*.ts hook."
+  # In a project built on a client data layer (Redux, react-query…) the fix is that layer, and a
+  # block would fight the codebase: advise instead (see references/existing-stacks.md).
+  if [ "$(bash "$SELF_DIR/stack.sh" 2>/dev/null | sed -n 's/^STACK_MODE="\(.*\)"$/\1/p' | tail -1)" = match ]; then
+    warn "Data fetching inside useEffect in $REL. This project has its own data layer — put the request behind it (an RTK Query endpoint, a useQuery hook, a thunk…) as existing-stacks.md describes, rather than a raw fetch in an effect."
+  else
+    err "Data fetching inside useEffect. Fetch in a Server Component via a service and pass the data down; if it is genuinely user-triggered, use a Server Action, or move the whole effect into a hooks/use-*.ts hook."
+  fi
 fi
 
 if grep -qE "^[[:space:]]*(export )?(async )?function [a-z][A-Za-z]*\(" <<<"$BODY" && grep -qE "(await (db|prisma|sql)\.|\.findMany\(|\.findUnique\(|\.insert\(|\.update\(\{)" <<<"$BODY"; then

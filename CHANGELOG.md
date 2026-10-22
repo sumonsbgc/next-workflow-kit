@@ -1,10 +1,10 @@
 # Changelog
 
 ## 2.4.0 — 2026-10-23
-Verification can't be skipped, tasks run as soon as they are planned, and nothing is published.
+Verification can't be skipped, and tasks run as soon as they are planned.
 - `tasks.sh close` refuses until a verdict is recorded for the task: PASS, UNVERIFIED, or a SKIPPED that `can-skip-verify` allowed. A FAIL must be fixed and re-verified first. `NEXT_WF_REQUIRE_VERDICT=off` turns the gate off. A task closed on UNVERIFIED is `done`, and its log line names the criteria the user should check.
 - `/next:write-task` writes tasks as `todo`, ready to run. The `draft` status and the `approve`/`accept` steps are gone; `tasks.sh new` takes `status: todo`.
-- New PreToolUse(Bash) hook `guard-owner.sh` blocks `git push` (also `git -C dir push`, `cd x && git push`, `sudo`/`timeout`/`sh -c` wrappers, quoted words), `gh pr create` and `gh pr merge`, and shell edits of a task's `status:`. A hook exit 2 blocks even when an allow rule matches (docs: permissions, "Extend permissions with hooks"), so a `Bash(git push *)` rule left in `settings.local.json` doesn't reopen it. Only words in command position count, and heredoc bodies fed to anything but a shell are data, so commit messages and scripts that mention these words pass. `NEXT_WF_ALLOW_PUSH=1` in the environment Claude Code was started with turns the push check off. It is a speed bump, not a boundary: a git alias or a script can still push.
+- New PreToolUse(Bash) hook `guard-owner.sh` blocks shell edits of a task's `status:`, so statuses move only through `tasks.sh` and stay in step with the log and verdict. Pushing and opening pull requests are not blocked: Claude does them when the user asks.
 
 ## 2.3.1 — 2026-10-15
 - guard-secrets: the new glob shortcuts (a `*` can't match a leading dot; a bare `*` blocks only where a key file exists) now apply only to plain shell globbing. With find/rg/grep/git/tar-style matchers, `-name`/`-path`/`-g`/`--include`, dotglob/GLOBIGNORE, or a `cd`/`pushd` in the command, every pattern match blocks as before (`find . -name '*' -exec cat {} +` would have reached .env). The filesystem check resolves against the hook input's `cwd`, not the project root. Found by automated security review.

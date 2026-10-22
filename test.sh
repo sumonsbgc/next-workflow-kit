@@ -842,7 +842,7 @@ assert_contains "SubagentStart is scoped to kit agents" "$SET" '^(next-.*)$'
 L1="$(CLAUDE_PROJECT_DIR="$P" bash "$H/session-context.sh" | jq -r .hookSpecificOutput.additionalContext | wc -c)"
 [ "$L1" -lt 9000 ] && ok "session context stays under the 10,000-char hook cap ($L1)" || bad "session context stays under the 10,000-char hook cap ($L1)"
 
-group "owner steps: verdict gate, no push"
+group "owner steps: verdict gate, status edits"
 V="$TMP/gate"; mkdir -p "$V"
 printf '{"dependencies":{"next":"15.1.0"}}' > "$V/package.json"
 ( cd "$V" && git init -q && git config user.email t@t && git config user.name t && echo a > a.txt && git add . && git commit -qm init )
@@ -871,20 +871,16 @@ gt start 103 >/dev/null; echo c >> "$V/a.txt"
 gt can-skip-verify 103 >/dev/null; gt verdict 103 SKIPPED 1 >/dev/null; gt close 103 tiny >/dev/null
 assert_contains "an allowed SKIPPED closes" "$(gt show 103)" "status: done"
 own() { printf '{"tool_input":{"command":%s}}' "$(printf '%s' "$1" | jq -Rs .)" | bash "$H/guard-owner.sh" >/dev/null 2>&1; echo $?; }
-for c in 'git push' 'git push origin main' 'cd app && git -C .. push -u origin x' '"git" push' '/usr/bin/git push' 'git -c a=b push' 'gh pr create --fill' 'gh pr merge 3' \
-         "sed -i 's/status: todo/status: done/' .claude/tasks/001-x.md" 'echo status: todo > .claude/tasks/001-x.md' \
-         'sudo -u x git push' 'timeout 30 git push' 'sh -c "git push"' "$(printf "bash <<'EOF'\ngit push\nEOF")" \
-         "$(printf "cat <<EOF > f\nx\nEOF\ngit push")"; do
-  assert_eq "owner guard blocks: $c" "$(own "$c")" "2"
+for c in "sed -i 's/status: todo/status: done/' .claude/tasks/001-x.md" 'echo status: todo > .claude/tasks/001-x.md' \
+         "$(printf "bash <<'EOF'\necho status: done > .claude/tasks/001-x.md\nEOF")"; do
+  assert_eq "owner guard blocks: ${c%%$'\n'*}" "$(own "$c")" "2"
 done
-for c in 'git status' 'git commit -m "push the fix"' 'echo push' 'gh pr view' 'git log --oneline | head' \
-         'git commit -m "close the task, then git push"' 'bash .claude/hooks/tasks.sh start 001' \
-         "$(printf "python3 - <<'PY'\ngit push\nPY")" \
+for c in 'git push' 'git push -u origin main' 'gh pr create --fill' 'git status' 'git commit -m "push the fix"' \
+         'bash .claude/hooks/tasks.sh start 001' \
          'bash .claude/hooks/tasks.sh close 001 "done"' 'grep -n status: .claude/tasks/001-x.md' \
          "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'TASK'\n---\nstatus: todo\n---\nsee .claude/tasks/ > x\nTASK")"; do
   assert_eq "owner guard allows: ${c%%$'\n'*}" "$(own "$c")" "0"
 done
-assert_eq "NEXT_WF_ALLOW_PUSH=1 reopens pushing" "$(NEXT_WF_ALLOW_PUSH=1 own 'git push')" "0"
 assert_contains "the owner guard is registered before Bash runs" "$(cat "$KIT/.claude/settings.json")" "guard-owner.sh"
 assert_contains "the installer knows the owner guard" "$(cat "$KIT/install.sh")" "guard-owner"
 

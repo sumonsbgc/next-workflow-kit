@@ -61,7 +61,7 @@ Load the reference, not the whole skill, when the reference is what you need.
    - `FAIL` → fix exactly what it lists, re-verify. After two failed rounds, `bash $T block <id> "<the failing criteria>"` and stop.
    - `PASS WITH UNVERIFIED` → close, and name the unverified `[browser]` criteria in the log line so the user can check them.
 8. **Close it.** `bash $T close <id> "<one line: what you did and any decision you made>"`.
-9. **Never publish.** No `git push`, no `gh pr create`/`merge` — a hook blocks them. Leave the work in the tree (or in local checkpoint commits) and tell the user it is ready.
+9. **Don't publish unasked.** No `git push` or `gh pr create`/`merge` unless the user asks for it. Leave the work in the tree (or in local checkpoint commits) and tell the user it is ready.
 10. **Record what you learned** — see **Memory**.
 
 ### Ambiguity

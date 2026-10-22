@@ -63,5 +63,5 @@ task can close:
 ## Status
 
 `todo` → `doing` → `done`, or `blocked` with a reason in the log. A task cannot close without a
-verifier verdict. Claude never pushes or opens a pull request (a hook blocks it); commits, if any,
-stay local. You can edit statuses by hand at any time.
+verifier verdict. Claude pushes or opens a pull request only when you ask; commits, if any, stay
+local. You can edit statuses by hand at any time.

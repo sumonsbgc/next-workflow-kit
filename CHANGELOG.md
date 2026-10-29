@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.6.2 — 2026-10-30
+- guard-owner strips a heredoc body only when the text before `<<` has no quotes, backticks, `$(`, backslash or `#`, so `echo "<<EOF"` or `true # <<EOF` can't hide the commands after it (automated security review). Otherwise the whole command is scanned.
+
 ## 2.6.1 — 2026-10-30
 Fixes from automated security review.
 - guard-owner reads a heredoc delimiter the way bash does: the whole word with its quotes removed (`<<"E"OF` is `EOF`), ended only by an exact terminator line (leading tabs only for `<<-`). With more than one heredoc, an odd delimiter, or no terminator, the whole command is scanned. Before, `cat <<"E"OF … EOF` followed by `git push` hid the push.

@@ -24,8 +24,10 @@ if [ "$HEREDOCS" = 1 ] && [[ "$FIRST" != *'<<<'* ]] && [[ "$FIRST" =~ \<\<(-?)[[
   TAG="$(printf '%s' "${BASH_REMATCH[2]}" | tr -d "\"'\\\\")"
   [[ "$TAG" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || TAG=""
 fi
+PRE="${FIRST%%<<*}"
+[[ "$PRE" == *[\"\'\`\\#]* || "$PRE" == *'$('* ]] && TAG=""
 if [ -n "${TAG:-}" ]; then
-  read -ra F <<<"${FIRST%%<<*}"
+  read -ra F <<<"$PRE"
   k=0; while [ "$k" -lt "${#F[@]}" ] && [[ "${F[$k]}" == *=* ]]; do k=$((k + 1)); done
   RUNS=0
   if [[ "${F[$k]:-}" =~ ^(.*/)?(bash|sh|zsh|dash|ksh)$ ]]; then

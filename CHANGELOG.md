@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.6.4 — 2026-10-30
+- guard-owner fails closed on heredocs: it no longer tries to tell data heredocs from executed ones, a parser differential that four automated reviews in a row found new ways around (`<<"E"OF`, `echo "<<EOF"`, `cat <<EOF | bash`, `<(…)`). Every heredoc body is scanned. The only exception is the kit's own draft form, `bash <helpers>/tasks.sh new <id>-<slug> <<'TAG'` … `TAG` with a quoted delimiter and nothing after the terminator, whose body is a task description that only tasks.sh reads. Cost: a heredoc of plain data that has a line starting with `git push` (or `tasks.sh approve`) is now blocked too.
+
 ## 2.6.3 — 2026-10-30
 - guard-owner keeps a heredoc body out of the scan only when the rest of the first line after `<<` has no `|`, `;`, `&`, backtick or `$(`. `cat <<EOF | bash` and `cat <<EOF; …` fed the "data" body to a shell or chained another command, and the body (a `git push`, say) went unchecked (automated security review). A heredoc redirected to a file is still treated as data.
 

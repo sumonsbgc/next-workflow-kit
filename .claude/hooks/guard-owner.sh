@@ -15,33 +15,12 @@ fi
 
 block() { echo "Blocked by next-workflow: $1" >&2; exit 2; }
 
-# A heredoc fed to anything but a shell is data (a task for `tasks.sh new`, a script for python,
-# a file for cat), not commands: drop its body. Fed to a bare shell (`bash <<EOF`) it runs, so it stays.
 FIRST="${CMD%%$'\n'*}"
-HEREDOCS="${FIRST//[^<]/ }"; HEREDOCS="$(printf '%s' "$HEREDOCS" | grep -o '<<' | wc -l | tr -d ' ')"
-if [ "$HEREDOCS" = 1 ] && [[ "$FIRST" != *'<<<'* ]] && [[ "$FIRST" =~ \<\<(-?)[[:space:]]*([^[:space:]\;\&\|\<\>\(\)]+) ]]; then
-  DASH="${BASH_REMATCH[1]}"
-  TAG="$(printf '%s' "${BASH_REMATCH[2]}" | tr -d "\"'\\\\")"
-  [[ "$TAG" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || TAG=""
-fi
-PRE="${FIRST%%<<*}"
-POST="${FIRST#*<<}"
-[[ "$PRE" == *[\"\'\`\\#]* || "$PRE" == *'$('* ]] && TAG=""
-[[ "$POST" == *[\|\;\&\`]* || "$POST" == *'$('* ]] && TAG=""
-if [ -n "${TAG:-}" ]; then
-  read -ra F <<<"$PRE"
-  k=0; while [ "$k" -lt "${#F[@]}" ] && [[ "${F[$k]}" == *=* ]]; do k=$((k + 1)); done
-  RUNS=0
-  if [[ "${F[$k]:-}" =~ ^(.*/)?(bash|sh|zsh|dash|ksh)$ ]]; then
-    RUNS=1; for x in "${F[@]:$((k + 1))}"; do [[ "$x" == -* ]] || { RUNS=0; break; }; done   # `bash script.sh <<X` feeds data
-  fi
-  if [ "$RUNS" = 0 ]; then
-    TERMINATED="$(printf '%s\n' "$CMD" | awk -v t="$TAG" -v dash="$DASH" 'NR > 1 { l = $0; if (dash == "-") sub(/^\t+/, "", l); if (l == t) { print "yes"; exit } }')"
-    if [ "$TERMINATED" = yes ]; then
-      REST="$(printf '%s\n' "$CMD" | awk -v t="$TAG" -v dash="$DASH" 'NR > 1 && !past { l = $0; if (dash == "-") sub(/^\t+/, "", l); if (l == t) past = 1; next } NR > 1 { print }')"
-      CMD="$FIRST"${REST:+$'\n'"$REST"}
-    fi
-  fi
+TQ="'"
+if [[ "$FIRST" =~ ^[[:space:]]*bash[[:space:]]+[A-Za-z0-9_./~-]*tasks\.sh[[:space:]]+new[[:space:]]+[0-9]{3,}-[a-z0-9-]+[[:space:]]*\<\<[[:space:]]*($TQ([A-Za-z_]+)$TQ|\"([A-Za-z_]+)\")[[:space:]]*$ ]]; then
+  TAG="${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+  BODY="${CMD#*$'\n'}"; BODY="${BODY%"${BODY##*[![:space:]]}"}"
+  if [ "$BODY" != "$CMD" ] && [ "${BODY##*$'\n'}" = "$TAG" ] && [ "$(grep -cxF -- "$TAG" <<<"$BODY")" = 1 ]; then CMD="$FIRST"; fi
 fi
 
 # Quotes and backslashes only change how the shell groups words; drop them so the command

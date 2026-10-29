@@ -1,6 +1,6 @@
 {
   "name": "next",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "description": "Next.js App Router workflow: plan tasks with /next:write-task, build them with /next:task, independent verification, stack-aware guards and project memory.",
   "author": {
     "name": "Mohammad Sumon"

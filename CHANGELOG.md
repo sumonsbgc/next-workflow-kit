@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.6.5 — 2026-10-30
+- guard-owner's task-draft exception matches only literal spaces and tabs, refuses any command containing `\r`, `\v` or `\f`, and trims only trailing newlines before comparing lines byte for byte. A `\r` after the delimiter made bash's terminator `TAG\r`, so a middle `TAG\r` line ended the heredoc early in bash but not in the guard (automated security review).
+
 ## 2.6.4 — 2026-10-30
 - guard-owner fails closed on heredocs: it no longer tries to tell data heredocs from executed ones, a parser differential that four automated reviews in a row found new ways around (`<<"E"OF`, `echo "<<EOF"`, `cat <<EOF | bash`, `<(…)`). Every heredoc body is scanned. The only exception is the kit's own draft form, `bash <helpers>/tasks.sh new <id>-<slug> <<'TAG'` … `TAG` with a quoted delimiter and nothing after the terminator, whose body is a task description that only tasks.sh reads. Cost: a heredoc of plain data that has a line starting with `git push` (or `tasks.sh approve`) is now blocked too.
 

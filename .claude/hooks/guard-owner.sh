@@ -17,9 +17,9 @@ block() { echo "Blocked by next-workflow: $1" >&2; exit 2; }
 
 FIRST="${CMD%%$'\n'*}"
 TQ="'"
-if [[ "$FIRST" =~ ^[[:space:]]*bash[[:space:]]+[A-Za-z0-9_./~-]*tasks\.sh[[:space:]]+new[[:space:]]+[0-9]{3,}-[a-z0-9-]+[[:space:]]*\<\<[[:space:]]*($TQ([A-Za-z_]+)$TQ|\"([A-Za-z_]+)\")[[:space:]]*$ ]]; then
+if [[ "$CMD" != *[$'\r\v\f']* ]] && [[ "$FIRST" =~ ^[\ $'\t']*bash[\ $'\t']+[A-Za-z0-9_./~-]*tasks\.sh[\ $'\t']+new[\ $'\t']+[0-9]{3,}-[a-z0-9-]+[\ $'\t']*\<\<[\ $'\t']*($TQ([A-Za-z_]+)$TQ|\"([A-Za-z_]+)\")$ ]]; then
   TAG="${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
-  BODY="${CMD#*$'\n'}"; BODY="${BODY%"${BODY##*[![:space:]]}"}"
+  BODY="${CMD#*$'\n'}"; BODY="${BODY%"${BODY##*[!$'\n']}"}"
   if [ "$BODY" != "$CMD" ] && [ "${BODY##*$'\n'}" = "$TAG" ] && [ "$(grep -cxF -- "$TAG" <<<"$BODY")" = 1 ]; then CMD="$FIRST"; fi
 fi
 

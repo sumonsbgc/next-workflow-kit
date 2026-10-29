@@ -1117,6 +1117,8 @@ assert_eq "a heredoc piped into a shell is scanned" "$(own "$(printf 'cat <<EOF 
 assert_eq "a heredoc followed by another command is scanned" "$(own "$(printf 'cat <<EOF; git push\nx\nEOF')")" "2"
 assert_eq "heredoc bodies are always scanned (fail closed)" "$(own "$(printf 'cat <<EOF > notes.txt\ngit push\nEOF')")" "2"
 assert_eq "the task-draft form with trailing text is scanned" "$(own "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'TASK'\nx\nTASK\ngit push")")" "2"
+assert_eq "a carriage return can't shift the draft terminator" "$(own "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'T'\\r\\nT\\r\\ngit push\\nT")")" "2"
+assert_eq "a near-terminator line (trailing space) stays data, as in bash" "$(own "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'T'\\nT \\ngit push\\nT")")" "0"
 assert_eq "a quoted-delimiter task draft still passes" "$(own "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'TASK'\ngit push\nTASK")")" "0"
 mkdir -p "$IG/.claude/.cache"; printf 'CMD_TEST="rm -rf x"\n' > "$IG/.claude/.cache/stack.env"
 assert_eq "allow-helpers ignores a tampered stack cache" "$(printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf x"}}' | CLAUDE_PROJECT_DIR="$IG" bash "$H/allow-helpers.sh" | grep -c allow)" "0"

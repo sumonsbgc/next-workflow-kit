@@ -25,7 +25,9 @@ if [ "$HEREDOCS" = 1 ] && [[ "$FIRST" != *'<<<'* ]] && [[ "$FIRST" =~ \<\<(-?)[[
   [[ "$TAG" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || TAG=""
 fi
 PRE="${FIRST%%<<*}"
+POST="${FIRST#*<<}"
 [[ "$PRE" == *[\"\'\`\\#]* || "$PRE" == *'$('* ]] && TAG=""
+[[ "$POST" == *[\|\;\&\`]* || "$POST" == *'$('* ]] && TAG=""
 if [ -n "${TAG:-}" ]; then
   read -ra F <<<"$PRE"
   k=0; while [ "$k" -lt "${#F[@]}" ] && [[ "${F[$k]}" == *=* ]]; do k=$((k + 1)); done

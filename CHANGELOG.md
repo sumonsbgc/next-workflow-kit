@@ -1,5 +1,8 @@
 # Changelog
 
+## 2.6.3 — 2026-10-30
+- guard-owner keeps a heredoc body out of the scan only when the rest of the first line after `<<` has no `|`, `;`, `&`, backtick or `$(`. `cat <<EOF | bash` and `cat <<EOF; …` fed the "data" body to a shell or chained another command, and the body (a `git push`, say) went unchecked (automated security review). A heredoc redirected to a file is still treated as data.
+
 ## 2.6.2 — 2026-10-30
 - guard-owner strips a heredoc body only when the text before `<<` has no quotes, backticks, `$(`, backslash or `#`, so `echo "<<EOF"` or `true # <<EOF` can't hide the commands after it (automated security review). Otherwise the whole command is scanned.
 

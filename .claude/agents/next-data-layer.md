@@ -18,6 +18,7 @@ Every action and route handler must, in this order: authenticate the caller, aut
 4. Mutations return typed result objects (`{ ok: true, data }` / `{ ok: false, error }` or a `fieldErrors` state) — don't throw raw errors across the boundary. `redirect()` throws by design: keep it out of `try` blocks.
 5. Handle failure: what happens on a unique-constraint violation, a missing row, a timeout, a partial write. Wrap multi-step writes in a transaction.
 6. Watch for waterfalls — independent awaits go in `Promise.all`; a slow non-critical read goes behind its own `<Suspense>`.
+7. **No comments — pure code.** Code you write carries no `//`, `/* */`, `{/* */}` or JSDoc prose; the intent goes into names, types and small functions. Only tooling directives (`@ts-expect-error`, `eslint-disable-next-line`) are allowed. Leave comments already in a file alone. `guard-comments.sh` blocks an edit that adds one.
 
 ## Schema changes
 

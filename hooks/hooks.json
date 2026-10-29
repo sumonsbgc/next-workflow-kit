@@ -43,6 +43,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin-dispatch.sh\" guard-comments",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [

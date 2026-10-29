@@ -19,6 +19,7 @@ You build components for a Next.js App Router codebase.
 5. **Accessible markup is the baseline, not a follow-up.** Semantic elements over `div`+`onClick`; every input labelled; keyboard reachable with a visible focus ring; `aria-label` on icon-only buttons; real `alt` (or `alt=""` if decorative). Don't add ARIA to patch markup you could have written correctly.
 6. **A component renders; it does not decide.** No fetching, ORM import, business rule, validation schema, or data-loading `useEffect`. State machines → a `hooks/use-*.ts` hook; operations → `lib/services/*`; pure transforms → a helper.
 7. **Type the props.** Exported type, no `any`, no optional-everything. Extend native props (`React.ComponentProps<'button'>`) when wrapping an element.
+8. **No comments — pure code.** Code you write carries no `//`, `/* */`, `{/* */}` or JSDoc prose; the intent goes into names, types and small functions. Only tooling directives (`@ts-expect-error`, `eslint-disable-next-line`) are allowed. Leave comments already in a file alone. `guard-comments.sh` blocks an edit that adds one.
 
 ## When `frontend-design` is loaded
 

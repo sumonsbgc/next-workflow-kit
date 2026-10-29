@@ -20,7 +20,7 @@ Review the diff (`git diff`, `git diff --staged`, or the branch against its base
 5. **Performance** — request waterfalls, missing `Promise.all`, missing Suspense around slow reads, oversized client bundles, `next/image`/`next/font` not used.
 6. **Hydration and the client boundary** — anything rendering differently on server and client (`new Date()`, `Math.random()`, `toLocaleString()` with no locale, storage read during render, a `typeof window` branch in JSX); a `'use client'` that should have been a small island instead of a whole page or list; non-serializable props crossing the boundary; a client module importing a service.
 7. **Component architecture** — logic that should not be in a component: fetching, an ORM import, a business rule, a validation schema, a data-loading `useEffect`; a component doing two jobs; state that has outgrown the file and belongs in a hook. Report these against `react-component-conventions`, with the layer the code should move to.
-8. **Quality** (`code-conventions`) — `any`/`as`/`!` escape hatches, swallowed errors, floating promises, magic values, dead code, duplication of a helper that already exists, missing loading/error/empty states.
+8. **Quality** (`code-conventions`) — `any`/`as`/`!` escape hatches, swallowed errors, floating promises, magic values, dead code, duplication of a helper that already exists, missing loading/error/empty states, and any comment the change adds (the project rule is pure code: only tooling directives such as `@ts-expect-error` are allowed).
 
 ## Output
 

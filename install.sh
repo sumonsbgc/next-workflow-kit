@@ -6,6 +6,7 @@
 #   ./install.sh --global          # agents/commands/skill/hooks for every project
 #   ./install.sh . --dry-run
 #   ./install.sh /path/to/app --uninstall   remove the kit's files and hook entries
+#   ./install.sh /path/to/app --stage-branch stage   the branch /next:sync pulls before every push
 #
 # Or install it as a Claude Code plugin instead (no files copied into the project; update with
 # `claude plugin update next@next-workflow`):
@@ -19,15 +20,18 @@
 set -euo pipefail
 
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET=""; GLOBAL=0; DRY=0; FORCE=0; UNINSTALL=0
+TARGET=""; GLOBAL=0; DRY=0; FORCE=0; UNINSTALL=0; STAGE_BRANCH=""; NEXT_IS_STAGE=0
 VERSION="$(cat "$KIT/VERSION" 2>/dev/null || echo dev)"
 for a in "$@"; do
+  if [ "$NEXT_IS_STAGE" = 1 ]; then STAGE_BRANCH="$a"; NEXT_IS_STAGE=0; continue; fi
   case "$a" in
+    --stage-branch) NEXT_IS_STAGE=1 ;;
+    --stage-branch=*) STAGE_BRANCH="${a#--stage-branch=}" ;;
     --global) GLOBAL=1 ;;
     --dry-run) DRY=1 ;;
     --force) FORCE=1 ;;
     --uninstall) UNINSTALL=1 ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
     *) TARGET="$a" ;;
   esac
 done
@@ -55,7 +59,7 @@ fi
 
 # Kit-owned hook commands, matched by script name. Used to drop the kit's previous entries
 # before merging (so upgrades never stack duplicates) and to remove them on uninstall.
-KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|guard-owner|verify|subagent-context)\.sh'
+KIT_HOOKS_RE='\.claude/hooks/(session-context|guard-rsc|guard-component|guard-styles|format|post-edit|bash-guard|guard-secrets|guard-owner|guard-comments|verify|subagent-context)\.sh'
 # Permission rules earlier kit versions shipped and later ones removed. A union merge would keep
 # them forever, so they're dropped from the existing settings on every install.
 RETIRED='["Read(//home/**)","Bash(git diff:*)","Bash(git log:*)","Bash(git status:*)","Bash(npx playwright test:*)","Bash(npx playwright test -c .claude/verify.playwright.config.mjs:*)","Bash(npx next lint:*)"]'
@@ -74,7 +78,7 @@ if [ "$UNINSTALL" = 1 ]; then
   printf '\nRemoving next-workflow from %s\n\n' "$DEST"
   run "rm -rf '$DEST/commands/next' '$DEST/skills/nextjs-app-router' '$DEST/skills/react-component-conventions' '$DEST/skills/code-conventions'"
   run "rm -f '$DEST/agents/'next-*.md '$DEST/next-workflow.version' '$DEST/verify.playwright.config.mjs'"
-  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets guard-owner guard-read allow-helpers plugin-dispatch verify verify-browser run-tasks repo-map subagent-context; do
+  for h in _lib stack tasks session-context guard-rsc guard-component guard-styles format post-edit bash-guard guard-secrets guard-owner guard-comments guard-read allow-helpers plugin-dispatch verify verify-browser run-tasks repo-map subagent-context git-sync; do
     run "rm -f '$DEST/hooks/$h.sh'"
   done
   if [ -f "$DEST/settings.json" ] && command -v jq >/dev/null 2>&1; then
@@ -109,8 +113,8 @@ run "chmod +x '$DEST/hooks/'*.sh"
 say "agents:   $(ls "$KIT/.claude/agents" | wc -l) files"
 say "commands: /next:$(ls "$KIT/.claude/commands/next" | sed 's/\.md$//' | tr '\n' ' ' | sed 's/ /, \/next:/g; s/, \/next:$//')"
 say "skills:   nextjs-app-router, react-component-conventions, code-conventions (+ $(cat "$KIT/.claude/skills/"*/references/* /dev/null | wc -l | tr -d ' ') lines of references)"
-say "hooks:    session-context, post-edit (guard-rsc, guard-component, guard-styles, format), bash-guard, guard-secrets, guard-owner, verify"
-say "helpers:  stack.sh (detection, cached), tasks.sh (task bookkeeping), run-tasks.sh (headless runner)"
+say "hooks:    session-context, post-edit (guard-rsc, guard-component, guard-styles, format), bash-guard, guard-secrets, guard-owner, guard-comments, verify"
+say "helpers:  stack.sh (detection, cached), tasks.sh (task bookkeeping), run-tasks.sh (headless runner), git-sync.sh (stage pull + push)"
 say "version:  $VERSION"
 
 # ---- settings.json -----------------------------------------------------------
@@ -156,6 +160,15 @@ if [ "$GLOBAL" = 0 ]; then
   fi
 fi
 
+# ---- stage branch --------------------------------------------------------------
+if [ "$GLOBAL" = 0 ] && [ -n "$STAGE_BRANCH" ]; then
+  if [ "$DRY" = 1 ]; then say "[dry-run] stage branch: $STAGE_BRANCH"
+  elif ! git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1; then say "stage:    skipped — $TARGET is not a git repository"
+  else say "stage:    $(CLAUDE_PROJECT_DIR="$TARGET" bash "$DEST/hooks/git-sync.sh" stage "$STAGE_BRANCH" 2>&1 | tail -n 1)"; fi
+elif [ "$GLOBAL" = 0 ] && [ ! -f "$DEST/workflow.conf" ] && git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1; then
+  say "stage:    not set — /next:setup or the first /next:sync asks (or re-run with --stage-branch <name>)"
+fi
+
 # ---- tasks folder (2.3 moved it under .claude) --------------------------------
 if [ "$GLOBAL" = 0 ] && [ -f "$TARGET/tasks/TEMPLATE.md" ] && [ ! -d "$DEST/tasks" ]; then
   say "tasks:    still in ./tasks (pre-2.3 layout, keeps working) — move it with: bash .claude/hooks/tasks.sh migrate"
@@ -186,6 +199,7 @@ Long batches — each task in a fresh session, optional commit per task:
     bash .claude/hooks/run-tasks.sh --checkpoint
 
 Around the work:  /next:test  /next:review  /next:audit  /next:ship
+Git:              /next:sync   commit + pull the stage branch + check + push, in one go
 Numbers:          bash .claude/hooks/tasks.sh stats
 
 Optional, in your shell (Claude can't change these): NEXT_WF_VERIFY_BROWSER=off skips Playwright

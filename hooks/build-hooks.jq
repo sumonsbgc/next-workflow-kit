@@ -14,7 +14,7 @@ def dispatch($n): "bash \"${CLAUDE_PLUGIN_ROOT}/.claude/hooks/plugin-dispatch.sh
     | .SubagentStart |= map(.matcher = "(^|:)next-")
     | .PreToolUse = (
         [{matcher: "Read", hooks: [{type: "command", command: dispatch("guard-read"), timeout: 10}]}]
-        + (.PreToolUse | map(.hooks += [{type: "command", command: dispatch("allow-helpers"), timeout: 10}]))
+        + (.PreToolUse | map(if .matcher == "Bash" then .hooks += [{type: "command", command: dispatch("allow-helpers"), timeout: 10}] else . end))
       )
   )
 }

@@ -29,6 +29,7 @@
       "Bash(npx tsc --noEmit:*)",
       "Bash(npx vitest run:*)",
       "Bash(bash .claude/hooks/verify-browser.sh:*)",
+      "Bash(bash .claude/hooks/git-sync.sh:*)",
       "Bash(printenv NEXT_WF_DEV_URL)",
       "Bash(npx next build:*)",
       "Bash(bash .claude/hooks/tasks.sh:*)",
@@ -82,6 +83,16 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-owner.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-comments.sh",
             "timeout": 10
           }
         ]

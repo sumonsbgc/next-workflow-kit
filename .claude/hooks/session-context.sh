@@ -88,6 +88,18 @@ VERIFYLINE=""
 [ "${NEXT_WF_VERIFY_BROWSER:-on}" = off ] && VERIFYLINE="
 - Verification: browser checks are OFF (NEXT_WF_VERIFY_BROWSER=off, set by the user to save tokens). The verifier marks [browser] criteria UNVERIFIED without starting Playwright; the user checks them."
 
+GITLINE=""
+if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  STAGE_NOW="$(CLAUDE_PROJECT_DIR="$ROOT" bash "$SELF_DIR/git-sync.sh" stage 2>/dev/null | head -n 1)"
+  if [[ "$STAGE_NOW" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+    GITLINE="
+- Git: stage branch \`$STAGE_NOW\`. Push only when the user asks, and only through \`bash $HELPERS/git-sync.sh push\`, after \`git-sync.sh sync\` has pulled the stage branch in (/next:sync does all of it). Plain git push is blocked."
+  else
+    GITLINE="
+- Git: no stage branch configured yet — /next:sync asks the user for it. Pushing goes only through git-sync.sh; plain git push is blocked."
+  fi
+fi
+
 TEXT="Detected stack (next-workflow $KIT_VERSION, auto-detected at session start — this report is the source of truth for the stack):
 - Kit helpers: \`$HELPERS\` — run \`bash $HELPERS/tasks.sh …\` (and run-tasks.sh, verify.sh) from there.
 - Next.js: ${NEXT_INSTALLED:-$NEXT_VERSION} — $ROUTER, routes live in ${APP_DIR:-$PAGES_DIR}. $NEXTREF
@@ -98,8 +110,8 @@ TEXT="Detected stack (next-workflow $KIT_VERSION, auto-detected at session start
 - Design: the \`frontend-design\` skill is available — load it when building new UI or restyling, and not for refactors, fixes, or components that must match existing siblings.}
 - Unit tests: ${TEST_UNIT:-none} | E2E: ${TEST_E2E:-none}
 - Verify commands: typecheck=\`${CMD_TYPECHECK:-n/a}\` lint=\`${CMD_LINT:-n/a}\` test=\`${CMD_TEST:-n/a}\` build=\`$CMD_BUILD\`
-- Repo map: \`bash $HELPERS/tasks.sh map\` prints routes, components, lib modules and server actions (cached, regenerated when files change). Read it before exploring with grep/ls.
+- Repo map: \`bash $HELPERS/tasks.sh map\` prints routes, components, lib modules and server actions (cached, regenerated when files change). Read it before exploring with grep/ls.$GITLINE
 
-Use these exact commands rather than inventing them. If Tailwind is absent do not add Tailwind classes; if shadcn/ui is not configured, write plain components instead of importing @/components/ui/*. Write classes for the installed Tailwind version only — a utility from a newer minor silently emits no CSS.$VERIFYLINE$CONTEXT$TASKS$RECORD"
+Use these exact commands rather than inventing them. If Tailwind is absent do not add Tailwind classes; if shadcn/ui is not configured, write plain components instead of importing @/components/ui/*. Write classes for the installed Tailwind version only — a utility from a newer minor silently emits no CSS. Code you write carries no comments — pure code; only tooling directives such as @ts-expect-error are allowed.$VERIFYLINE$CONTEXT$TASKS$RECORD"
 
 wf_context SessionStart "$TEXT"

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.6.0 — 2026-10-30
+**No comments — pure code.** Code written for a task carries no comments.
+- New PreToolUse(Edit|Write|MultiEdit) hook `guard-comments.sh` blocks an edit that adds a `//`, `/* */`, JSDoc prose, `{/* */}` or `<!-- -->` line to TS/JS, CSS, Vue/HTML or shell files, before the file is written, and names the lines. Only comments the edit adds count: ones already in the file (or in `old_string`) are left alone. Allowed: `'use client'`/`'use server'`, shebangs, tooling directives (`@ts-expect-error`, `eslint-disable-next-line`, `prettier-ignore`) and type-only JSDoc tags. `node_modules/`, `.next/`, `dist/`, `build/`, `out/`, `coverage/`, `next-env.d.ts` and `.claude/` are skipped. `NEXT_WF_COMMENT_GUARD=off` turns it off. It always runs in a plugin install. Works without jq (Node fallback).
+- The rule is in `code-conventions` (replacing "comment why, not what"), the builder agents, the test writer, `/next:task`, `/next:feature`, `/next:test`, the reviewer's checklist and the session report.
+- Plugin build: `allow-helpers` is attached only to the Bash matcher (it has nothing to approve on Edit/Write).
+
+**Git: commit, pull the stage branch, push.**
+- One command, `/next:sync` (user-only, `disable-model-invocation`), does the whole round: commit, pull the stage branch in, re-run the checks if anything came in, push. New helper `git-sync.sh` (`stage [<branch>]`, `candidates`, `status`, `check-staged`, `sync`, `push`): `sync` fetches and brings in this branch's own remote commits and then the stage branch (merge by default, `SYNC_MODE=rebase` to rebase; a conflict stops with exit 3 and the file list); `push` refuses until the branch contains the stage branch's latest commit and never forces.
+- The stage branch lives in `.claude/workflow.conf` (`STAGE_BRANCH=…`, committed). Set it with `./install.sh /path/to/app --stage-branch stage`, or `/next:setup` and the first `/next:sync` ask, suggesting `stage`/`staging`/`develop` from the remote. `NEXT_WF_STAGE_BRANCH`, `NEXT_WF_SYNC_MODE` and `NEXT_WF_REMOTE` override it.
+- The owner guard blocks a plain `git push` (command position, through wrappers and `git -C`) and points at `git-sync.sh push`, so no push skips the stage pull. Claude still pushes only when asked.
+- The session report names the stage branch and the push rule.
+- Guide PDF updated for 2.6; its source is now `docs/guide.html`.
+
 ## 2.5.2 — 2026-10-23
 - The browser-check switch is now `NEXT_WF_VERIFY_BROWSER=off`. 2.5.0 called it `NEXT_WF_VERIFY=no-browser`, but `NEXT_WF_VERIFY` already selects what the Stop hook runs (`typecheck`, `typecheck,lint`, `off`). Setting it to `no-browser` silently meant typecheck-only, and browser-off couldn't be combined with lint or off. The owner guard covers the new name.
 - Guide PDF updated for 2.5.

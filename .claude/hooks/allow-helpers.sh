@@ -32,7 +32,7 @@ H="$(printf '%s' "$SELF_DIR" | sed 's/[]\\.^$*+?(){}|[]/\\&/g')"
 # Only the plugin's own copies, by absolute path. A relative `.claude/hooks/…` would run whatever
 # the project has at that path; when the project really has its own install, plugin-dispatch.sh
 # skips this hook and the project's settings.json allow rules apply instead.
-HELPER_RE="^bash $H/(tasks|stack|repo-map|verify-browser)\\.sh( .*)?$"
+HELPER_RE="^bash $H/(tasks|stack|repo-map|verify-browser|git-sync)\\.sh( .*)?$"
 
 # The task-writing heredoc: exactly one command line, a quoted delimiter, nothing after it.
 FIRST="${CMD%%$'\n'*}"

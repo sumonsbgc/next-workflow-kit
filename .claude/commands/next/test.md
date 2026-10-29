@@ -13,5 +13,6 @@ Require:
 - Branch coverage that matters: happy path, validation failure, unauthorized, empty, error.
 - Queries by role/label/text; no class-name or implementation-detail assertions.
 - The suite actually run, with output reported.
+- No comments in test code: the test name says what it proves.
 
 If a test fails, it must decide whether the test or the code is wrong and say which. Weakening assertions or skipping tests to get green is not an acceptable outcome.

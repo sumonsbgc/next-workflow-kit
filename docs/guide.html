@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>next-workflow Guide</title>
+<style>
+@page { size: A4; margin: 15mm 16mm 15mm 16mm; }
+:root { --ink:#1f2937; --muted:#5b6472; --blue:#1565c0; --line:#d7dce3; --head:#eef4fd; --code:#0f172a; }
+* { box-sizing: border-box; }
+body { font-family: "Liberation Sans", Arial, Helvetica, sans-serif; color: var(--ink); font-size: 10pt; line-height: 1.5; margin: 0; background: #fff; }
+h1 { font-size: 26pt; margin: 28pt 0 6pt; color: #111827; letter-spacing: -0.3pt; }
+.sub { color: var(--muted); font-size: 12pt; margin: 0 0 14pt; max-width: 85%; }
+.toc { border-top: 1px solid var(--line); padding-top: 8pt; columns: 2; column-gap: 24pt; font-size: 8.5pt; margin-bottom: 18pt; }
+.toc div { padding: 2.5pt 0; }
+h2 { color: var(--blue); font-size: 15pt; margin: 22pt 0 10pt; padding-bottom: 6pt; border-bottom: 1.5px solid #374151; break-after: avoid; }
+h3 { font-size: 11pt; margin: 14pt 0 6pt; break-after: avoid; }
+p { margin: 0 0 8pt; }
+ul { margin: 0 0 10pt; padding-left: 16pt; }
+li { margin: 3pt 0; }
+code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 7.8pt; background: #eef0f3; border-radius: 3px; padding: 1pt 4pt; }
+pre { background: var(--code); color: #e5e7eb; border-radius: 5px; padding: 9pt 11pt; font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 7.6pt; line-height: 1.6; margin: 6pt 0 8pt; white-space: pre-wrap; break-inside: avoid; }
+pre .c { color: #8b95a5; }
+table { width: 100%; border-collapse: collapse; margin: 6pt 0 12pt; font-size: 8.4pt; break-inside: auto; }
+th { background: var(--head); text-align: left; font-weight: bold; padding: 7pt 8pt; }
+td { padding: 6pt 8pt; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr { break-inside: avoid; }
+thead { display: table-header-group; break-after: avoid; }
+td:first-child { white-space: nowrap; }
+td.wrap { white-space: normal; }
+.new { color: #15803d; font-size: 7pt; font-weight: bold; white-space: nowrap; }
+.step { display: grid; grid-template-columns: 22pt 1fr; column-gap: 10pt; margin: 12pt 0; break-inside: avoid; }
+.dot { width: 18pt; height: 18pt; border-radius: 50%; background: var(--blue); color: #fff; font-weight: bold; font-size: 8pt; display: flex; align-items: center; justify-content: center; }
+.step h4 { margin: 2pt 0 6pt; font-size: 10pt; }
+.note { border-left: 3px solid var(--blue); background: #eef4fd; padding: 8pt 11pt; margin: 10pt 0; break-inside: avoid; }
+.warn { border-left: 3px solid #b7791f; background: #fdf6e3; padding: 8pt 11pt; margin: 10pt 0; break-inside: avoid; }
+.ok { border-left: 3px solid #2f855a; background: #eef7f0; padding: 8pt 11pt; margin: 10pt 0; break-inside: avoid; }
+.note b, .warn b, .ok b { display: block; margin-bottom: 3pt; }
+.flow { text-align: center; font-weight: bold; margin: 8pt 0 4pt; }
+.flow span { color: var(--muted); font-weight: normal; padding: 0 6pt; }
+.pb { break-before: page; }
+table.set td:first-child { white-space: normal; width: 34%; }
+table.set td:nth-child(2) { width: 26%; }
+</style>
+</head>
+<body>
+
+<h1>next-workflow 2.6</h1>
+<p class="sub">A step-by-step guide to adding this Claude Code workflow to your Next.js app, and what it does once it's in.</p>
+<div class="toc">
+<div>1. What is next-workflow?</div>
+<div>2. What you need first</div>
+<div>3. Installing it: plugin or project files</div>
+<div>4. Your first task: plan, build</div>
+<div>5. How a task is checked</div>
+<div>6. Running many tasks safely</div>
+<div>7. Projects with their own stack</div>
+<div>8. Git: one command to commit, pull, push</div>
+<div>9. All commands and helpers</div>
+<div>10. The specialist agents</div>
+<div>11. Automatic checks (hooks)</div>
+<div>12. The coding rules it follows</div>
+<div>13. Settings you can change</div>
+<div>14. A typical day</div>
+<div>15. Problems and fixes</div>
+<div>16. What's new in 2.6 and 2.5</div>
+<div>17. Measuring the workflow</div>
+</div>
+
+<h2>1. What is next-workflow?</h2>
+<p>next-workflow is a <b>kit for Claude Code</b>, not a Next.js library. Nothing is added to your app's code or bundle. It adds instructions and checks to Claude Code, as a plugin or as files in your project's <code>.claude/</code> folder, and they change how Claude Code works on your Next.js project.</p>
+<ul>
+<li><b>It plans before it builds.</b> Opus turns your request into small task files with clear "done" checks. Read them and change anything you disagree with.</li>
+<li><b>Sonnet builds each task.</b> It works directly for small tasks and uses specialist agents for large ones.</li>
+<li><b>A second agent checks the work.</b> It sees only the task and the changes, never the builder's reasoning. A task can't be closed without its verdict.</li>
+<li><b>It fits your project.</b> It detects your Next.js, Tailwind and library versions. In a Redux, antd or formik project it follows those, not its own defaults.</li>
+<li><b>Automatic checks run on every edit</b> and catch Next.js mistakes before the build does.</li>
+<li><b>It remembers your project</b> in <code>.claude/project-context.md</code>, and recent verification failures, so it doesn't re-learn or repeat them.</li>
+<li><b>Pure code.</b> Nothing written for a task carries a comment; intent goes into names, types and small functions. A check blocks any edit that adds one.</li>
+<li><b>It's safe to undo.</b> You can get one commit per task and roll back any single task.</li>
+</ul>
+<div class="note"><b>In one sentence</b>Describe what you want with <code>/next:write-task</code>, run <code>/next:task</code>, and every task is built, independently checked and recorded.</div>
+
+<h2>2. What you need first</h2>
+<table>
+<thead><tr><th>Requirement</th><th>Why</th></tr></thead>
+<tr><td>A Next.js 15 or 16 project</td><td>Its <code>package.json</code> must list <code>"next"</code>. The workflow detects the version and follows the right rules.</td></tr>
+<tr><td>Claude Code</td><td>The workflow runs inside it (terminal, desktop app or IDE).</td></tr>
+<tr><td>bash, Node.js</td><td>The checks are shell scripts (Linux, macOS, or WSL on Windows).</td></tr>
+<tr><td><code>jq</code></td><td>Needed for safe settings merging, the track record and batch runs.</td></tr>
+<tr><td>git (recommended)</td><td>Enables task diffs, the verifier's view of changes, per-task commits and undo.</td></tr>
+<tr><td>Playwright (optional)</td><td>Lets the verifier check <code>[browser]</code> criteria in a real browser.</td></tr>
+</table>
+
+<h2>3. Installing it: plugin or project files</h2>
+<p>There are two ways. Pick <b>one</b> per project. If both are present, the plugin says so at session start and the project files win.</p>
+<table>
+<thead><tr><th></th><th>A. Plugin <span class="new">new in 2.5</span></th><th>B. Project files</th></tr></thead>
+<tr><td>Where it lives</td><td class="wrap">Once, in Claude Code. Nothing is copied into the project.</td><td class="wrap">Copied into <code>your-app/.claude/</code>, so it can be committed for the team.</td></tr>
+<tr><td>Updating</td><td class="wrap"><code>claude plugin update next@next-workflow</code></td><td class="wrap">Run <code>./install.sh</code> again.</td></tr>
+<tr><td>Helper commands</td><td class="wrap">In the plugin's folder. The session report prints the path ("Kit helpers").</td><td class="wrap"><code>bash .claude/hooks/…</code></td></tr>
+</table>
+
+<div class="step"><div class="dot">A</div><div>
+<h4>Install as a plugin</h4>
+<pre>claude plugin marketplace add ~/www/hobbies/next-workflow
+claude plugin install next@next-workflow</pre>
+<p>The commands are the same <code>/next:*</code>. A plugin can't carry permission rules, so two extra checks take their place: one approves only the kit's own helper and test commands, and one blocks Claude from reading <code>.env</code> files and keys. Your own deny and ask rules always win.</p>
+</div></div>
+
+<div class="step"><div class="dot">B</div><div>
+<h4>Or copy it into your app</h4>
+<pre>cd ~/www/hobbies/next-workflow
+./install.sh /path/to/your-next-app          <span class="c"># add --dry-run to preview</span></pre>
+<p>This copies the kit into <code>your-next-app/.claude/</code> and merges <code>settings.json</code>. The old file is backed up and older kit entries are replaced, so nothing is duplicated. It also stamps the kit version and records the type errors that already exist, so Claude is held only to the errors it introduces.</p>
+</div></div>
+
+<div class="step"><div class="dot">1</div><div>
+<h4>Open Claude Code in your app, then run setup once</h4>
+<pre>cd /path/to/your-next-app
+claude
+/next:setup</pre>
+<p>At start you'll see a short report: kit version, Next version, Tailwind, your libraries, test tools and the verify commands. That means it's working. Setup creates <code>.claude/tasks/</code>, fills <code>.claude/project-context.md</code> with facts about your repo, adds a short pointer to <code>CLAUDE.md</code>, and tells you what won't work here (for example "no git, so no undo").</p>
+<div class="warn"><b>If setup says the typecheck is already failing</b>Type <code>! bash .claude/hooks/verify.sh --baseline</code> in the prompt (plugin: the Kit helpers path from the report). That records the existing errors. Claude isn't allowed to do this itself, so it can never excuse its own mistakes.</div>
+</div></div>
+
+<div class="ok"><b>Commit</b>With project files: <code>.claude/</code> (including <code>.claude/tasks/</code>) and <code>CLAUDE.md</code>, so your team gets the same workflow. With the plugin: <code>.claude/tasks/</code>, <code>.claude/project-context.md</code> and <code>CLAUDE.md</code>. <code>.claude/.cache/</code> is git-ignored.</div>
+
+<h2>4. Your first task: plan, build</h2>
+<div class="step"><div class="dot">1</div><div>
+<h4>Describe what you want</h4>
+<pre>/next:write-task a projects page where users see their projects and can archive one</pre>
+<p>The planner (Opus) asks questions first if something is unclear, splits big requests into small tasks, sets the order (<code>depends</code>) and size, and writes the task files, ready to run. It never writes code.</p>
+</div></div>
+<div class="step"><div class="dot">2</div><div>
+<h4>Read the tasks, change what you disagree with</h4>
+<pre>---
+id: 003
+title: Projects page with archive
+status: todo
+depends: 002
+size: large
+---
+## Goal
+Signed-in users see their own projects at /projects and can archive one.
+
+## Acceptance
+- [ ] [review]  /projects lists only the signed-in user's projects
+- [ ] [test]    Archiving someone else's project fails and changes nothing
+- [ ] [browser] Signed-out users are redirected to /login
+
+## Notes
+Out of scope: un-archive.</pre>
+<p>Each "done" check carries a tag saying how it will be proven:</p>
+<ul>
+<li><code>[test]</code>: a test must prove it.</li>
+<li><code>[browser]</code>: it has to be seen in the running app.</li>
+<li><code>[review]</code>: reading the code is enough.</li>
+</ul>
+</div></div>
+<div class="step"><div class="dot">3</div><div>
+<h4>Build it</h4>
+<pre>/next:task</pre>
+<p>Sonnet takes the next runnable task and works through it: builds it (directly if small, with the full phased build if large), runs the checks, gets the verifier's verdict (section 5), closes it with a log line, and saves what it learned.</p>
+</div></div>
+<div class="flow">todo <span>→</span> doing <span>→</span> done <span>or</span> blocked</div>
+
+<h2>5. How a task is checked</h2>
+<p>The builder can't mark its own work done. <code>tasks.sh close</code> refuses until a verdict is recorded:</p>
+<table>
+<thead><tr><th>Verdict</th><th>What happens</th></tr></thead>
+<tr><td>PASS</td><td class="wrap">Every criterion was proven. The task closes.</td></tr>
+<tr><td>FAIL</td><td class="wrap">The builder fixes exactly what failed and the verifier checks again. After two failed rounds the task is blocked. What failed is recorded, and later sessions see it.</td></tr>
+<tr><td>UNVERIFIED</td><td class="wrap">Everything else passed, but a <code>[browser]</code> criterion couldn't be seen (no dev server or Playwright). The task closes as done, and its log line names the criteria you should check.</td></tr>
+<tr><td>SKIPPED</td><td class="wrap">Only for tiny changes: every criterion is <code>[review]</code> and the diff is at most 20 lines (you can raise this to 60).</td></tr>
+</table>
+<p><b>Track record</b> <span class="new">new in 2.5</span>: each session report shows the verifier's first-pass rate and the last three failures ("004: search was case-sensitive"), so Claude doesn't repeat them.</p>
+
+<h2>6. Running many tasks safely</h2>
+<p>Running tasks one after another in a single conversation lets context pile up, and quality drops by the 4th or 5th task. So <code>/next:task all</code> stops after 3. For longer batches use the runner, which starts a fresh session for every task:</p>
+<pre>bash .claude/hooks/run-tasks.sh --checkpoint                <span class="c"># all runnable tasks, in order</span>
+bash .claude/hooks/run-tasks.sh 004 005 --budget 3          <span class="c"># just these, max $3 each</span></pre>
+<table>
+<thead><tr><th>Option</th><th>Effect</th></tr></thead>
+<tr><td><code>--checkpoint</code></td><td class="wrap">One local git commit per finished task, named <code>task 004: …</code>, on a new branch <code>nw/batch-&lt;time&gt;</code> so main is never touched. Each commit holds only that task's files: never secret files, never edits that were already there.</td></tr>
+<tr><td><code>--no-branch</code></td><td class="wrap">With <code>--checkpoint</code>, commit on the current branch instead</td></tr>
+<tr><td><code>--budget USD</code></td><td class="wrap">Spending limit per task</td></tr>
+<tr><td><code>--max N</code></td><td class="wrap">Stop after N tasks</td></tr>
+<tr><td><code>--dry-run</code></td><td class="wrap">Show what would run, and run nothing</td></tr>
+</table>
+<p>The runner stops at the first task that doesn't finish (blocked, failed or over budget). Run it again and it continues from there. It prints time, turns and cost per task, and points out tasks that closed with UNVERIFIED criteria for you to check.</p>
+<p><b>Undo one task</b> (needs <code>--checkpoint</code>): <code>bash .claude/hooks/tasks.sh undo 004</code>. That task's code is reverted and it goes back to <code>todo</code>. If later finished tasks depend on it, undo refuses and lists them. <code>undo 004 --cascade</code> undoes those first, newest first.</p>
+<p>When the batch looks good: <code>git switch main &amp;&amp; git merge nw/batch-…</code> (the runner prints the exact command). Claude pushes or opens a pull request only when you ask it to.</p>
+
+<h2>7. Projects with their own stack <span class="new">new in 2.5</span></h2>
+<p>The kit's own line is server-first, zod and zustand (section 12). Many real apps are built differently. When the project uses any of these, the kit switches to <b>match mode</b>:</p>
+<table>
+<thead><tr><th>Kind</th><th>Detected</th></tr></thead>
+<tr><td>State</td><td class="wrap">Redux Toolkit, redux, jotai (zustand stays on the kit line)</td></tr>
+<tr><td>Server data</td><td class="wrap">RTK Query (found from <code>createApi</code>), react-query, SWR, Apollo</td></tr>
+<tr><td>Forms, validation</td><td class="wrap">formik, TanStack Form, yup, valibot (yup without zod means match)</td></tr>
+<tr><td>UI kits</td><td class="wrap">antd, MUI, Chakra, Mantine</td></tr>
+</table>
+<p>In match mode the session report says "match the existing stack" and lists your libraries. Claude then:</p>
+<ul>
+<li>follows the patterns already in your code, and never adds a second library for the same job (no zustand next to Redux, no zod next to yup);</li>
+<li>adds data access through your data client (an RTK Query endpoint, a <code>useQuery</code> hook), not a fetch in an effect;</li>
+<li>validates Server Actions with the same yup schema the form uses;</li>
+<li>doesn't move existing client code to the server unless the task asks;</li>
+<li>still applies the safety rules: authenticate, authorize and validate at every boundary, accessible markup, no secrets in client code.</li>
+</ul>
+<p>The rules are in <code>react-component-conventions/references/existing-stacks.md</code>. To force a mode, set <code>NEXT_WF_STACK_MODE=kit</code> or <code>match</code>.</p>
+
+<h2>8. Git: one command to commit, pull, push</h2>
+<p>One command does the whole round. Only you can start it, so Claude never runs it on its own: <span class="new">new</span></p>
+<pre>/next:sync [commit message]</pre>
+<table>
+<thead><tr><th>Step</th><th>What happens</th></tr></thead>
+<tr><td>1. Commit</td><td class="wrap">Stages everything not ignored, refuses secret files, and commits with a message in your project's style (or yours, if you pass one).</td></tr>
+<tr><td>2. Pull</td><td class="wrap">Brings this branch's own remote commits and then the <b>stage branch</b> into the current branch (merge by default). Clear conflicts are resolved; unclear ones stop everything and are explained.</td></tr>
+<tr><td>3. Check</td><td class="wrap">If anything came in, the tests run again. A failure stops the push.</td></tr>
+<tr><td>4. Push</td><td class="wrap">Pushes the branch. It never pushes a branch that doesn't contain the stage branch's latest commit, and never force-pushes.</td></tr>
+</table>
+<div class="step"><div class="dot">1</div><div>
+<h4>Tell it your stage branch once</h4>
+<pre>./install.sh /path/to/app --stage-branch stage          <span class="c"># at install, or:</span>
+/next:setup                                             <span class="c"># asks, suggesting stage/staging/develop</span></pre>
+<p>It's stored in <code>.claude/workflow.conf</code> (<code>STAGE_BRANCH=stage</code>, <code>SYNC_MODE=merge</code>). Commit that file so the team shares it. If it's missing, the first <code>/next:sync</code> asks.</p>
+</div></div>
+<p>A plain <code>git push</code> from Claude is always blocked and redirected, so no push can skip the stage pull. The git work is done by <code>git-sync.sh</code> (<code>status</code>, <code>sync</code>, <code>push</code>, <code>stage</code>, <code>candidates</code>), which you can also run in your own terminal. Claude pushes only when you ask, and always through this path.</p>
+
+<h2>9. All commands and helpers</h2>
+<table>
+<thead><tr><th>Slash command</th><th>Model</th><th>Use it to…</th></tr></thead>
+<tr><td><code>/next:setup</code></td><td>current</td><td class="wrap">Connect the workflow to the project. Run once.</td></tr>
+<tr><td><code>/next:write-task &lt;what&gt;</code></td><td>Opus</td><td class="wrap">Plan work into task files. Never writes code.</td></tr>
+<tr><td><code>/next:task [id|all|list]</code></td><td>Sonnet</td><td class="wrap">Build tasks: your main command.</td></tr>
+<tr><td><code>/next:feature &lt;id&gt;</code></td><td>Sonnet</td><td class="wrap">Force the full phased build (data → page → UI → tests → review) on a task.</td></tr>
+<tr><td><code>/next:test [target]</code></td><td>current</td><td class="wrap">Write or fix tests outside a task.</td></tr>
+<tr><td><code>/next:review [target]</code></td><td>Opus reviewer</td><td class="wrap">Review your changes for bugs and security holes. It doesn't change anything.</td></tr>
+<tr><td><code>/next:audit [path]</code></td><td>current</td><td class="wrap">Performance, accessibility and correctness audit, ranked.</td></tr>
+<tr><td><code>/next:ship</code></td><td>current</td><td class="wrap">Typecheck, lint, tests and build, fixing what fails. Never commits.</td></tr>
+</table>
+<p>Terminal helpers are below with the project-files path. With the plugin, use the <b>Kit helpers</b> path from the session report instead of <code>.claude/hooks</code>.</p>
+<table>
+<thead><tr><th>Terminal helper</th><th>Does</th></tr></thead>
+<tr><td><code>bash .claude/hooks/tasks.sh list</code></td><td class="wrap">Status of every task</td></tr>
+<tr><td><code>… tasks.sh diff &lt;id&gt;</code></td><td class="wrap">Everything a task changed</td></tr>
+<tr><td><code>… tasks.sh undo &lt;id&gt; [--cascade]</code></td><td class="wrap">Revert a task's checkpoint commit (and its dependents with <code>--cascade</code>)</td></tr>
+<tr><td><code>… tasks.sh map</code></td><td class="wrap">A short map of the app (routes, components, lib modules), cached</td></tr>
+<tr><td><code>… tasks.sh context &lt;id&gt;</code></td><td class="wrap">The task plus what its dependencies did and changed</td></tr>
+<tr><td><code>… tasks.sh stats [--brief]</code></td><td class="wrap">Tasks done, time per size, batch cost, verifier first-pass rate, which checks fire most. <code>--brief</code>: the one-line track record. <span class="new">2.5</span></td></tr>
+<tr><td><code>… tasks.sh compact-context</code></td><td class="wrap">Tidy <code>project-context.md</code>: drop duplicate facts, merge repeated headings, remove empty sections (a backup is kept). <span class="new">2.5</span></td></tr>
+<tr><td><code>… tasks.sh dir / migrate</code></td><td class="wrap">Which folder holds the tasks / move an older project's <code>tasks/</code> to <code>.claude/tasks/</code></td></tr>
+<tr><td><code>bash .claude/hooks/run-tasks.sh</code></td><td class="wrap">Batch runner, with a fresh session per task</td></tr>
+</table>
+
+<h2>10. The specialist agents</h2>
+<table>
+<thead><tr><th>Agent</th><th>Job</th><th>Can edit?</th></tr></thead>
+<tr><td><code>next-route-builder</code></td><td class="wrap">Pages, layouts, loading, error and not-found files, metadata</td><td>Yes</td></tr>
+<tr><td><code>next-ui-builder</code></td><td class="wrap">Components, styling, accessible markup</td><td>Yes</td></tr>
+<tr><td><code>next-data-layer</code></td><td class="wrap">Server Actions, queries, caching, API routes</td><td>Yes</td></tr>
+<tr><td><code>next-test-writer</code></td><td class="wrap">Vitest and Playwright tests</td><td>Yes</td></tr>
+<tr><td><code>next-verifier</code></td><td class="wrap">Checks every "done" criterion against the task and diff only (Sonnet)</td><td>No</td></tr>
+<tr><td><code>next-reviewer</code></td><td class="wrap">Security and correctness review (always Opus)</td><td>No</td></tr>
+<tr><td><code>next-perf-auditor</code></td><td class="wrap">Bundle size, waterfalls, images and fonts</td><td>No</td></tr>
+<tr><td><code>next-a11y-auditor</code></td><td class="wrap">Keyboard, focus, labels, contrast (no shell access at all)</td><td>No</td></tr>
+</table>
+<p>Every agent starts with the stack report and project memory, so it doesn't explore your code from scratch. With the plugin, agents are named <code>next:next-verifier</code> and so on.</p>
+
+<h2>11. Automatic checks (hooks)</h2>
+<table>
+<thead><tr><th>Check</th><th>When</th><th>What it does</th></tr></thead>
+<tr><td><code>session-context</code></td><td>Session start</td><td class="wrap">Reports the kit version and your stack, points to the Next 15 or 16 rules, says whether to match your stack, and loads the project memory and track record.</td></tr>
+<tr><td><code>guard-comments</code></td><td>Before each edit</td><td class="wrap">Code written for a task carries no comments. Blocks an edit that adds a comment line, before the file is written. Comments already in the file, <code>'use client'</code>, and tooling directives (<code>@ts-expect-error</code>, <code>eslint-disable-next-line</code>) are allowed. <span class="new">2.6</span></td></tr>
+<tr><td><code>post-edit</code></td><td>After each edit</td><td class="wrap">Runs every edit check: App Router mistakes, component rules, Tailwind classes, then formatting. It gives one combined answer.</td></tr>
+<tr><td><code>bash-guard</code></td><td>After shell commands</td><td class="wrap">Files written through the shell (not Claude's edit tool) get the same checks, and still trigger the typecheck.</td></tr>
+<tr><td><code>guard-secrets</code></td><td>Before shell commands</td><td class="wrap">Blocks commands that read <code>.env</code> files or private keys. <code>.env.example</code> is allowed. It slows accidents down but isn't a security boundary (section 15).</td></tr>
+<tr><td><code>guard-owner</code></td><td>Before shell commands</td><td class="wrap">Keeps your decisions yours: task statuses change only through <code>tasks.sh</code>. Claude can't record the type-error baseline, and can't set the verification switches in section 13.</td></tr>
+<tr><td><code>verify</code></td><td>Before Claude finishes</td><td class="wrap">Typecheck. Only new errors fail; errors that already existed are baselined.</td></tr>
+<tr><td><code>guard-read</code>, <code>allow-helpers</code></td><td>Plugin only</td><td class="wrap">Stand in for the permission rules a plugin can't carry: block reading secret files, pre-approve the kit's own helper and test commands. Anything chained or unusual still asks you.</td></tr>
+</table>
+<p>Every check hit is recorded in <code>.claude/.cache/metrics.jsonl</code>. <code>tasks.sh stats</code> summarises them.</p>
+
+<h2>12. The coding rules it follows</h2>
+<ul>
+<li><b>Server Components by default.</b> Interactivity goes in small separate "island" files (<code>*.client.tsx</code>).</li>
+<li><b>Components only render.</b> Logic goes into hooks, services, helpers and schemas.</li>
+<li><b>zod at every input boundary.</b> zustand only when needed, created per request. (In match mode, your own libraries take their place: section 7.)</li>
+<li><b>Server Actions are public endpoints:</b> authenticate, authorize, validate, then change data.</li>
+<li><b>Version-aware:</b> Tailwind classes for the version you actually have installed. On Next 16 it uses <code>proxy.ts</code>, <code>'use cache'</code> / <code>cacheLife</code> / <code>cacheTag</code> and <code>updateTag</code>, and it greps the docs bundled with Next 16.2+ before relying on memory.</li>
+<li><b>No comments.</b> Pure code: names, types and small functions say what a comment would. <span class="new">2.6</span></li>
+<li><b>Accessibility is part of the job</b>, and your existing style always wins.</li>
+</ul>
+
+<h2>13. Settings you can change</h2>
+<p>Set these in your shell before starting <code>claude</code> (or before the batch runner), or in the <code>env</code> section of your Claude Code settings. Claude is blocked from setting the verification switches itself.</p>
+<table class="set">
+<thead><tr><th>Variable</th><th>Values</th><th>Effect</th></tr></thead>
+<tr><td><code>NEXT_WF_CHECKPOINT</code></td><td><code>commit</code></td><td class="wrap">One local commit per finished task (the runner's <code>--checkpoint</code> sets this)</td></tr>
+<tr><td><code>NEXT_WF_DEV_URL</code></td><td class="wrap">e.g. <code>http://localhost:3000</code></td><td class="wrap">Lets the verifier check <code>[browser]</code> criteria in a real browser (needs <code>@playwright/test</code> in the project; the kit brings its own Playwright config)</td></tr>
+<tr><td><code>NEXT_WF_VERIFY_BROWSER</code> <span class="new">2.5</span></td><td><code>on</code>, <code>off</code></td><td class="wrap"><code>off</code> saves the most verifier tokens: no Playwright, and <code>[browser]</code> criteria are recorded UNVERIFIED for you to check</td></tr>
+<tr><td><code>NEXT_WF_SKIP_VERIFY_LINES</code> <span class="new">2.5</span></td><td class="wrap">number, default <code>20</code>, max <code>60</code></td><td class="wrap">How small a <code>[review]</code>-only change must be to skip the verifier</td></tr>
+<tr><td><code>NEXT_WF_STACK_MODE</code> <span class="new">2.5</span></td><td><code>kit</code>, <code>match</code></td><td class="wrap">Override the detected mode (section 7)</td></tr>
+<tr><td><code>NEXT_WF_VERIFY</code></td><td class="wrap"><code>typecheck</code>, <code>typecheck,lint</code>, <code>off</code></td><td class="wrap">What runs before Claude finishes</td></tr>
+<tr><td><code>NEXT_WF_REQUIRE_VERDICT</code></td><td><code>on</code>, <code>off</code></td><td class="wrap">The verdict gate on close (section 5)</td></tr>
+<tr><td><code>NEXT_WF_COMPONENT_GUARD</code></td><td class="wrap"><code>enforce</code>, <code>warn</code>, <code>off</code></td><td class="wrap">Component rules: block, only advise, or off</td></tr>
+<tr><td><code>NEXT_WF_STYLE_GUARD</code></td><td><code>on</code>, <code>off</code></td><td class="wrap">Tailwind check</td></tr>
+<tr><td><code>NEXT_WF_COMMENT_GUARD</code> <span class="new">2.6</span></td><td><code>on</code>, <code>off</code></td><td class="wrap">The no-comments check (section 11)</td></tr>
+<tr><td><code>NEXT_WF_SECRETS_GUARD</code></td><td><code>on</code>, <code>off</code></td><td class="wrap">Blocking of <code>.env</code>/key reads</td></tr>
+<tr><td><code>NEXT_WF_FORMAT</code></td><td><code>all</code>, <code>prettier</code></td><td class="wrap"><code>prettier</code> skips the per-edit ESLint fix (faster on big repos)</td></tr>
+<tr><td><code>NEXT_WF_STAGE_BRANCH</code>, <code>…_SYNC_MODE</code> <span class="new">2.6</span></td><td class="wrap">a branch; <code>merge</code>, <code>rebase</code></td><td class="wrap">Override <code>.claude/workflow.conf</code> (section 8)</td></tr>
+<tr><td><code>NEXT_WF_METRICS</code></td><td><code>on</code>, <code>off</code></td><td class="wrap">Recording to <code>metrics.jsonl</code></td></tr>
+</table>
+<p><b>Update:</b> plugin: <code>claude plugin update next@next-workflow</code>. Project files: run <code>./install.sh /path/to/app</code> again. <b>Remove:</b> <code>claude plugin uninstall next@next-workflow</code>, or <code>./install.sh /path/to/app --uninstall</code>, which removes the kit's files and hook entries and keeps your tasks, memory and own settings.</p>
+
+<h2>14. A typical day</h2>
+<ol>
+<li><code>/next:write-task …</code>, then answer its questions.</li>
+<li>Read the new files in <code>.claude/tasks/</code> and change anything you disagree with.</li>
+<li>Optional: start <code>npm run dev</code> and set <code>NEXT_WF_DEV_URL</code> so browser checks really run (or <code>NEXT_WF_VERIFY_BROWSER=off</code> to save tokens and check them yourself).</li>
+<li><code>bash .claude/hooks/run-tasks.sh --checkpoint</code> and let it work, or <code>/next:task</code> for one at a time.</li>
+<li>Check the result, including any UNVERIFIED criteria the runner lists. Undo any task you don't like with <code>tasks.sh undo &lt;id&gt;</code>.</li>
+<li><code>/next:review</code>, then <code>/next:ship</code>. When everything is green, <code>/next:sync</code>: it pulls the stage branch in, re-runs the checks and pushes.</li>
+<li>Now and then, run <code>tasks.sh stats</code> to see cost, time, the verifier's pass rate and which checks fire most.</li>
+</ol>
+
+<h2>15. Problems and fixes</h2>
+<table>
+<thead><tr><th>Problem</th><th>Fix</th></tr></thead>
+<tr><td class="wrap">Every turn fails on old type errors</td><td class="wrap">Record them once: <code>! bash .claude/hooks/verify.sh --baseline</code></td></tr>
+<tr><td class="wrap">A task is blocked</td><td class="wrap">Read the reason in its Log section (in headless runs it's the question Claude would have asked), add the answer to Notes, set it back to <code>todo</code>, and run it again.</td></tr>
+<tr><td class="wrap">"no verdict recorded" when closing</td><td class="wrap">Intended: every task needs the verifier's verdict (section 5). Let <code>/next:task</code> finish the verification step.</td></tr>
+<tr><td class="wrap">The verifier marks <code>[browser]</code> items UNVERIFIED</td><td class="wrap">Start the dev server and set <code>NEXT_WF_DEV_URL</code>, with Playwright installed, and make sure <code>NEXT_WF_VERIFY_BROWSER</code> isn't <code>off</code>.</td></tr>
+<tr><td class="wrap">Claude added zustand/zod to a Redux/yup app</td><td class="wrap">Check the session report says "match the existing stack". If not, set <code>NEXT_WF_STACK_MODE=match</code>.</td></tr>
+<tr><td class="wrap">"installed twice" at session start</td><td class="wrap">The project has both the plugin and project files. Keep one: <code>./install.sh /path/to/app --uninstall</code>, or disable the plugin.</td></tr>
+<tr><td class="wrap">Plugin: a helper command still asks permission</td><td class="wrap">Only plain helper and test commands are pre-approved. Anything chained, with flags, or matching one of your own ask rules asks on purpose.</td></tr>
+<tr><td class="wrap">Claude was blocked setting a <code>NEXT_WF_…</code> variable</td><td class="wrap">Intended: the verification switches are yours. Set them yourself (section 13).</td></tr>
+<tr><td class="wrap"><code>undo</code> says there's no checkpoint</td><td class="wrap">The task was closed without <code>--checkpoint</code>. Use <code>tasks.sh diff</code> and revert by hand.</td></tr>
+<tr><td class="wrap">"checkpoint: SKIPPED — secret files changed"</td><td class="wrap">A <code>.env</code> or key file changed during the task. Add it to <code>.gitignore</code>, then commit the task's files yourself. Nothing was committed.</td></tr>
+<tr><td class="wrap">"project-context.md … only the first 4000 were loaded"</td><td class="wrap">Run <code>tasks.sh compact-context</code>, then merge what still repeats until it's under ~60 lines.</td></tr>
+<tr><td class="wrap">Claude asks permission to edit a file in <code>.claude/</code></td><td class="wrap">Normal: Claude Code protects that folder. New tasks don't ask, because they're written by <code>tasks.sh new</code>. Approve edits you asked for, or pick "allow for this session".</td></tr>
+<tr><td class="wrap">A command was blocked for touching <code>.env</code></td><td class="wrap">That's intended. Run it yourself, or use <code>.env.example</code>. The guard can't catch everything: for real protection keep production secrets out of the project folder, or use Claude Code's sandbox (<code>/sandbox</code>).</td></tr>
+<tr><td class="wrap">An edit was blocked for adding a comment</td><td class="wrap">Intended: Claude rewrites it without the comment. To allow comments, set <code>NEXT_WF_COMMENT_GUARD=off</code>.</td></tr>
+<tr><td class="wrap"><code>git push</code> was blocked</td><td class="wrap">Intended: every push goes through <code>/next:sync</code> (or <code>git-sync.sh push</code>), so the stage branch is always pulled in first.</td></tr>
+<tr><td class="wrap">A check blocks something you want</td><td class="wrap">Set that check to <code>warn</code> or <code>off</code> (section 13).</td></tr>
+<tr><td class="wrap">Installer: no "next" dependency</td><td class="wrap">Point it at the folder that holds your app's <code>package.json</code>.</td></tr>
+</table>
+
+<h2>16. What's new in 2.6 and 2.5</h2>
+<table>
+<thead><tr><th>Change</th><th>What it means for you</th></tr></thead>
+<tr><td>Git commands <span class="new">2.6</span></td><td class="wrap"><code>/next:sync</code> commits, pulls the stage branch in, checks and pushes in one go. Every push pulls the stage branch in first; plain <code>git push</code> is blocked (section 8).</td></tr>
+<tr><td>Pure code <span class="new">2.6</span></td><td class="wrap">Code written for a task has no comments. The rule is in every builder's instructions, and <code>guard-comments</code> blocks an edit that adds one, so Claude rewrites it without.</td></tr>
+<tr><td>Match the existing stack</td><td class="wrap">Redux, RTK Query, react-query, formik, yup, antd and similar projects are followed, not rewritten to the kit's defaults (section 7).</td></tr>
+<tr><td>Plugin install</td><td class="wrap">Install once, update with one command, nothing copied into projects (section 3).</td></tr>
+<tr><td>Cheaper verification</td><td class="wrap"><code>NEXT_WF_VERIFY_BROWSER=off</code> and <code>NEXT_WF_SKIP_VERIFY_LINES</code>. Verification is never skipped; unchecked browser items come to you as UNVERIFIED.</td></tr>
+<tr><td>Track record</td><td class="wrap">Recent verifier failures and the first-pass rate are in every session report.</td></tr>
+<tr><td>compact-context</td><td class="wrap">Keeps the project memory short, and so cheap to load.</td></tr>
+<tr><td>Next 16 baseline</td><td class="wrap">A known-good Next 16 + cacheComponents solution scores 5/5 on a real 16.4.1 build. Found on the way: a <code>redirect()</code> inside streamed <code>&lt;Suspense&gt;</code> returns HTTP 200, not 307, so auth redirects belong in <code>proxy.ts</code>.</td></tr>
+<tr><td>Fixes</td><td class="wrap">The stack cache now really works (detection used to re-run on every edit). <code>pnpm run</code>, <code>yarn</code> and <code>bun run</code> no longer ask permission, and <code>bun.lock</code> is detected. The batch runner no longer suggests a removed command.</td></tr>
+</table>
+<h3>Earlier releases</h3>
+<table>
+<thead><tr><th>Version</th><th>Main change</th></tr></thead>
+<tr><td>2.4</td><td class="wrap">Verdict gate: a task can't close without the verifier's verdict. Tasks run straight from planning (no approve step). Statuses move only through <code>tasks.sh</code>.</td></tr>
+<tr><td>2.3</td><td class="wrap">Tasks live in <code>.claude/tasks/</code>, and are written by <code>tasks.sh new</code> with no permission prompt per task.</td></tr>
+<tr><td>2.2</td><td class="wrap">Context memory: repo map, task handoff, subagents start with the stack report, memory reloaded after compaction.</td></tr>
+<tr><td>2.1</td><td class="wrap">Safe checkpoints (never secrets), real Playwright browser checks, undo with dependents, the eval harness, CHANGELOG and CI.</td></tr>
+<tr><td>2.0</td><td class="wrap">The verifier agent, a fresh session per task, per-task commits and undo, the type-error baseline, and metrics.</td></tr>
+</table>
+<p>Every change is listed in <code>CHANGELOG.md</code> in the kit.</p>
+
+<h2>17. Measuring the workflow</h2>
+<pre>./test.sh                                   <span class="c"># the kit's self-test, against throwaway fixtures</span>
+bash evals/run.sh --reference               <span class="c"># free: proves every check can pass (must be 5/5)</span>
+bash evals/run.sh --reference --next 16     <span class="c"># the same on Next 16 + cacheComponents</span>
+bash evals/run.sh                           <span class="c"># 3 real agent runs on Next 15 (costs API money)</span>
+bash evals/run.sh --next 16                 <span class="c"># real agent runs on the Next 16 variant</span></pre>
+<p>Results land in <code>evals/results/</code>. Compare them before and after changing any command, agent or skill. A change that lowers the pass rate or raises the cost is a regression.</p>
+
+</body>
+</html>

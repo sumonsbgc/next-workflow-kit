@@ -21,7 +21,7 @@ For each id, in the order given, skipping any whose dependencies aren't done (`b
 
 ## Phases
 
-Each phase's output is the next phase's input. Don't run them all blindly in parallel. Skip a phase the task genuinely doesn't need (no data change → no phase 2) and say so in the report.
+Every phase writes pure code: no comments of any kind (only tooling directives such as `@ts-expect-error`), and every agent you delegate to is told so. Each phase's output is the next phase's input. Don't run them all blindly in parallel. Skip a phase the task genuinely doesn't need (no data change → no phase 2) and say so in the report.
 
 ### 1. Understand (do this yourself, no subagent)
 

@@ -11,7 +11,7 @@ NAME="${1:-}"
 [[ "$NAME" =~ ^[a-z-]+$ ]] && [ -f "$SELF_DIR/$NAME.sh" ] || exit 0
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 case "$NAME" in
-  guard-secrets|guard-owner|guard-read|bash-guard|allow-helpers) exec bash "$SELF_DIR/$NAME.sh" ;;
+  guard-secrets|guard-owner|guard-read|guard-comments|bash-guard|allow-helpers) exec bash "$SELF_DIR/$NAME.sh" ;;
 esac
 registered() { # the project's settings run this hook themselves
   local f

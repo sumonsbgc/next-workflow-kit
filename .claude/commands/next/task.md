@@ -29,8 +29,9 @@ You are running against a task list, not a conversation. The same waste repeated
 5. **Load skills by need, not by habit** — see the table below. A CSS tweak does not need the data-layer conventions.
 6. **Delegate only what pays for itself.** A subagent starts cold and re-reads context you already have; it is worth it when the work is genuinely a separate layer with its own conventions, and a waste for a two-file change. Route by size — see **Routing**.
 7. **Edit source files only with Edit/Write**, never with `sed -i`, heredocs or scripts. The guards and the formatter run on Edit/Write; shell writes are caught after the fact and cost you a round-trip.
-8. **Verify proportionally** — see **Verification**. A full production build after every one-line change is minutes of wall clock for nothing.
-9. **Report in tens of lines, not hundreds.** No file dumps, no restating the diff, no narrating what you are about to do.
+8. **No comments — pure code.** Nothing you write carries a comment: no `//`, `/* */`, `{/* */}` or JSDoc prose. Names, types and small functions carry the intent. Only tooling directives (`@ts-expect-error`, `eslint-disable-next-line`) are allowed; `guard-comments.sh` blocks the rest, so writing them only costs a retry.
+9. **Verify proportionally** — see **Verification**. A full production build after every one-line change is minutes of wall clock for nothing.
+10. **Report in tens of lines, not hundreds.** No file dumps, no restating the diff, no narrating what you are about to do.
 
 ### Which skill for which task
 

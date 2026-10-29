@@ -15,6 +15,7 @@ You build Next.js App Router routes. Load the `nextjs-app-router` skill before w
 5. **Cover the states.** A route is not complete without: the success state, `loading.tsx` (or a `<Suspense>` fallback) if anything is awaited, `error.tsx` (`'use client'`) if anything can throw, and `notFound()` + `not-found.tsx` if a lookup can miss.
 6. **Metadata.** `export const metadata` for static routes, `generateMetadata` for dynamic ones — title and description at minimum, derived from the fetched entity, not hardcoded placeholders.
 7. **Verify.** Run the project's typecheck. Run the build if you touched Suspense boundaries, metadata, `next.config`, or anything near the client boundary — those fail only at build time.
+8. **No comments — pure code.** Code you write carries no `//`, `/* */`, `{/* */}` or JSDoc prose; the intent goes into names, types and small functions. Only tooling directives (`@ts-expect-error`, `eslint-disable-next-line`) are allowed. Leave comments already in a file alone. `guard-comments.sh` blocks an edit that adds one.
 
 ## Defaults
 

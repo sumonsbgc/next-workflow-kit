@@ -17,6 +17,7 @@ You write tests that fail when the product is broken and pass otherwise. Load th
 
 ## Rules
 
+- No comments in test code: the test name says what it proves. Pure code only; `guard-comments.sh` blocks an edit that adds one.
 - Never weaken an assertion, add a `skip`, or widen a matcher to make a suite green — fix the code or report the real failure.
 - No snapshot tests of whole pages.
 - Mock at the module boundary the code owns (`@/lib/posts`), not at `fetch` or the driver, unless you're specifically testing the fetch layer.

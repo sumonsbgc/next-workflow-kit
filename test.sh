@@ -875,7 +875,10 @@ for c in "sed -i 's/status: todo/status: done/' .claude/tasks/001-x.md" 'echo st
          "$(printf "bash <<'EOF'\necho status: done > .claude/tasks/001-x.md\nEOF")"; do
   assert_eq "owner guard blocks: ${c%%$'\n'*}" "$(own "$c")" "2"
 done
-for c in 'git push' 'git push -u origin main' 'gh pr create --fill' 'git status' 'git commit -m "push the fix"' \
+for c in 'git push' 'git push -u origin main' 'cd app && git -C .. push' '"git" push' 'sudo -u x git push'; do
+  assert_eq "owner guard sends plain push through git-sync: $c" "$(own "$c")" "2"
+done
+for c in 'gh pr create --fill' 'git status' 'git commit -m "push the fix"' 'bash .claude/hooks/git-sync.sh push' \
          'bash .claude/hooks/tasks.sh start 001' \
          'bash .claude/hooks/tasks.sh close 001 "done"' 'grep -n status: .claude/tasks/001-x.md' \
          "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'TASK'\n---\nstatus: todo\n---\nsee .claude/tasks/ > x\nTASK")"; do
@@ -1043,6 +1046,69 @@ assert_contains "secrets message shows the pattern" "$O" "(.e*)"
 assert_absent "and doesn't glob-expand it into the folder's files" "$O" "CHANGELOG.md"
 assert_absent "run-tasks no longer points at the removed accept step" "$(cat "$H/run-tasks.sh")" "tasks.sh accept"
 assert_absent "prompts don't hard-code the project helper path" "$(cat "$KIT"/.claude/agents/*.md "$KIT"/.claude/commands/next/*.md)" "bash .claude/hooks/"
+
+group "no comments: pure code (2.6)"
+CG="$TMP/comments"; mkdir -p "$CG/app" "$CG/components"; NL=$'\n'
+gc() { jq -n --arg f "$1" --arg o "$2" --arg n "$3" '{tool_name:"Edit",tool_input:{file_path:$f,old_string:$o,new_string:$n}}' | CLAUDE_PROJECT_DIR="$CG" bash "$H/guard-comments.sh" >/dev/null 2>&1; echo $?; }
+assert_eq "blocks a line comment" "$(gc "$CG/lib/a.ts" x "// load users${NL}const u = await getUsers()")" "2"
+assert_eq "blocks a trailing comment" "$(gc "$CG/lib/a.ts" x "const a = foo(); // why")" "2"
+assert_eq "blocks JSDoc prose" "$(gc "$CG/lib/a.ts" x "/**${NL} * Formats a price.${NL} */")" "2"
+assert_eq "blocks a JSX comment" "$(gc "$CG/components/a.tsx" x "{/* hero */}")" "2"
+assert_eq "blocks a CSS comment" "$(gc "$CG/app/globals.css" x "/* brand */${NL}a { color: red; }")" "2"
+assert_eq "allows @ts-expect-error" "$(gc "$CG/lib/a.ts" x "// @ts-expect-error${NL}foo()")" "0"
+assert_eq "allows eslint-disable-next-line" "$(gc "$CG/lib/a.ts" x "// eslint-disable-next-line no-console${NL}console.log(1)")" "0"
+assert_eq "allows 'use client'" "$(gc "$CG/components/a.tsx" x "'use client'${NL}export function A() { return null }")" "0"
+assert_eq "allows a URL in a string" "$(gc "$CG/lib/a.ts" x "const u = 'https://example.com'")" "0"
+assert_eq "allows a CSS universal selector" "$(gc "$CG/app/globals.css" x "* { box-sizing: border-box; }")" "0"
+assert_eq "ignores markdown" "$(gc "$CG/README.md" x "<!-- hi -->")" "0"
+assert_eq "ignores node_modules and .next" "$(gc "$CG/node_modules/x/a.js" x "// hi")$(gc "$CG/.next/x.js" x "// hi")" "00"
+printf '// existing note\nexport const a = 1\n' > "$CG/lib-b.ts"
+assert_eq "comments already in the file are kept" "$(gc "$CG/lib-b.ts" 'export const a = 1' "// existing note${NL}export const a = 2")" "0"
+assert_eq "NEXT_WF_COMMENT_GUARD=off turns it off" "$(NEXT_WF_COMMENT_GUARD=off gc "$CG/lib/a.ts" x "// hi")" "0"
+printf 'export const c = 1\n' > "$CG/c.ts"
+O="$(jq -n --arg f "$CG/c.ts" --arg c "// make it${NL}export const c = 1" '{tool_name:"Write",tool_input:{file_path:$f,content:$c}}' | CLAUDE_PROJECT_DIR="$CG" bash "$H/guard-comments.sh" 2>&1)"
+assert_contains "a Write that adds a comment is blocked and names the line" "$O" "// make it"
+assert_contains "the comment guard runs before Edit/Write" "$(cat "$KIT/.claude/settings.json")" "guard-comments.sh"
+for f in next-route-builder next-data-layer next-ui-builder; do
+  assert_contains "$f is told: no comments" "$(cat "$KIT/.claude/agents/$f.md")" "No comments — pure code"
+done
+assert_contains "the task runner is told: no comments" "$(cat "$KIT/.claude/commands/next/task.md")" "No comments — pure code"
+assert_contains "code-conventions states the rule" "$(cat "$KIT/.claude/skills/code-conventions/SKILL.md")" "carries no comments"
+
+group "git: commit, pull the stage branch, push (2.6)"
+GS="$TMP/gitsync"; mkdir -p "$GS"
+git init -q --bare "$GS/remote.git"
+git clone -q "$GS/remote.git" "$GS/app" 2>/dev/null
+gcfg() { git -C "$1" config user.email t@t; git -C "$1" config user.name t; git -C "$1" config commit.gpgsign false; }
+gcfg "$GS/app"
+( cd "$GS/app" && git checkout -q -b main && printf 'a\n' > a.txt && git add a.txt && git commit -qm init && git push -q origin main \
+  && git checkout -q -b stage && git push -q origin stage && git checkout -q -b feature && printf 'f\n' > f.txt && git add f.txt && git commit -qm feature ) 2>/dev/null
+git clone -q "$GS/remote.git" "$GS/mate" 2>/dev/null; gcfg "$GS/mate"
+( cd "$GS/mate" && git checkout -q stage && printf 's\n' > s.txt && git add s.txt && git commit -qm "stage work" && git push -q origin stage ) 2>/dev/null
+gsync() { (cd "$GS/app" && CLAUDE_PROJECT_DIR="$GS/app" bash "$H/git-sync.sh" "$@" 2>&1); }
+gsync_rc() { (cd "$GS/app" && CLAUDE_PROJECT_DIR="$GS/app" bash "$H/git-sync.sh" "$@" >/dev/null 2>&1); echo $?; }
+assert_eq "no stage branch configured: exit 2" "$(gsync_rc push)" "2"
+assert_contains "it suggests the stage branch from the remote" "$(gsync stage)" "likely candidates on origin: stage"
+assert_contains "stage <branch> records it" "$(gsync stage stage)" "stage branch: stage"
+assert_contains "the choice lives in .claude/workflow.conf" "$(cat "$GS/app/.claude/workflow.conf")" "STAGE_BRANCH=stage"
+( cd "$GS/app" && git add .claude/workflow.conf && git commit -qm conf )
+assert_eq "push refuses a branch missing the stage branch's commits" "$(gsync_rc push)" "5"
+assert_contains "sync merges the stage branch in" "$(gsync sync)" "brought in"
+assert_eq "after sync, push succeeds" "$(gsync_rc push)" "0"
+assert_eq "the branch is on the remote" "$(git -C "$GS/remote.git" rev-parse --verify --quiet refs/heads/feature >/dev/null && echo yes)" "yes"
+printf 'dirty\n' > "$GS/app/dirty.txt"
+assert_eq "push refuses uncommitted changes" "$(gsync_rc push)" "4"
+rm -f "$GS/app/dirty.txt"
+( cd "$GS/mate" && git pull -q origin stage && printf 'mate\n' > a.txt && git commit -qam "mate edit" && git push -q origin stage ) 2>/dev/null
+( cd "$GS/app" && printf 'mine\n' > a.txt && git commit -qam "my edit" )
+assert_eq "a conflicting stage change: exit 3" "$(gsync_rc sync)" "3"
+( cd "$GS/app" && git merge --abort )
+assert_contains "/next:sync runs only when the user types it" "$(cat "$KIT/.claude/commands/next/sync.md")" "disable-model-invocation: true"
+IG="$TMP/install-stage"; newproj "$IG"; git init -q "$IG"
+bash "$KIT/install.sh" "$IG" --stage-branch develop >/dev/null 2>&1
+assert_contains "install.sh --stage-branch records the stage branch" "$(cat "$IG/.claude/workflow.conf" 2>/dev/null)" "STAGE_BRANCH=develop"
+mkdir -p "$IG/app"
+assert_contains "the session report names the stage branch" "$(CLAUDE_PROJECT_DIR="$IG" bash "$H/session-context.sh")" "stage branch \`develop\`"
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

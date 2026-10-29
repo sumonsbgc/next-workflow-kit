@@ -3,6 +3,8 @@
 # tasks.sh, so the log and verdict stay in step. Like guard-secrets this is a speed bump, not a
 # boundary.
 set -uo pipefail
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SELF_DIR/_lib.sh"
 INPUT="$(cat)"
 if command -v jq >/dev/null 2>&1; then
   CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""')"
@@ -51,4 +53,35 @@ WRITES='(^|[[:space:]])(-i[^[:space:]]*|--in-place|tee|python3?|node|perl|ruby)(
 if [[ "$NORM" == *status:* ]] && [[ "$NORM" == *"${TASKS_DIR%/}/"* || "$NORM" == *tasks/* ]] && [[ "$NORM" =~ $WRITES ]]; then
   block "a task's status is changed only through tasks.sh (start/close/block), so the log and verdict stay in step with it."
 fi
+
+HELPERS="$(wf_helpers "$SELF_DIR")"
+set -f
+while IFS= read -r SEG; do
+  read -ra W <<<"$SEG"
+  n=${#W[@]}; CP=1; WRAP=0
+  for ((i = 0; i < n && CP == 1; i++)); do
+    w="${W[$i]}"
+    case "$w" in
+      git|*/git)
+        j=$((i + 1))
+        while [ "$j" -lt "$n" ]; do
+          case "${W[$j]}" in
+            -C|-c|--git-dir|--work-tree|--namespace|--exec-path) j=$((j + 2)) ;;
+            -*) j=$((j + 1)) ;;
+            *) break ;;
+          esac
+        done
+        if [ "${W[$j]:-}" = push ]; then
+          block "plain git push skips the stage-branch pull. Push only when the user asks, and only through bash $HELPERS/git-sync.sh push (it refuses until the branch contains the stage branch; run git-sync.sh sync first). /next:sync does the whole sequence."
+        fi
+        CP=0 ;;
+      sudo|env|xargs|nice|timeout|nohup|*/env) WRAP=1 ;;
+      command|exec|time|builtin|then|do|else|if|while|until|!|source|.) ;;
+      bash|sh|zsh|dash|ksh|*/bash|*/sh|*/zsh) ;;
+      -*|[0-9]*|*=*) ;;
+      *) [ "$WRAP" = 1 ] || CP=0 ;;
+    esac
+  done
+done < <(printf '%s\n' "$NORM" | sed 's/[;&|()]/\n/g')
+set +f
 exit 0

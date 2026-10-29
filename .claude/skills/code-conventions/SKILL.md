@@ -62,13 +62,15 @@ Rules that apply to every `.ts`/`.tsx` file regardless of layer. Component archi
 - Circular imports are a design error, not a build warning. Break them by moving the shared thing down a layer.
 - Never deep-import another module's internals. If two modules need the same thing, it belongs in a third.
 
-## Comments
+## No comments
 
-- Comment **why**, never **what**. `// clamp to 100 — the vendor API rejects larger pages` earns its place; `// loop over users` does not.
-- A comment explaining confusing code is a bid to rewrite the code. Take the bid.
-- No commented-out code. Git remembers it.
-- No `// TODO` without a name or an issue reference — an anonymous TODO is never done.
-- JSDoc on exported functions whose contract isn't obvious from the signature: what it throws, what it revalidates, what it costs.
+- **The code you write carries no comments.** No `//`, no `/* */`, no JSDoc prose, no `{/* */}` in JSX, none in CSS. Pure code: say the intent through names, types, small functions and named constants (`const MAX_PAGE_SIZE = 100` instead of a comment explaining a 100).
+- A comment that feels necessary means the code wants a better name or one more function. Take that instead.
+- Allowed, because tooling needs them: `@ts-expect-error` (give the reason in your report, not in the code), `eslint-disable-next-line <rule>`, `prettier-ignore`, type-only JSDoc tags in plain `.js` files (`@type`, `@param`, `@returns`), and license headers that already exist. `'use client'` and `'use server'` are directives, not comments.
+- Comments already in a file stay as they are; don't add new ones beside them.
+- The `//` notes in this skill's and the other skills' examples are explanations for you. Never copy them into code.
+- No commented-out code — git remembers it. No `TODO`s: finish it, or record the rest as a new task.
+- `guard-comments.sh` blocks an Edit/Write that adds a comment, before the file is written (`NEXT_WF_COMMENT_GUARD=off` is the user's switch).
 
 ## Dead code and duplication
 

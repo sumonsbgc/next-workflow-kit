@@ -56,9 +56,8 @@ esac
 # The verify commands detected for this project (values already restricted to a strict charset),
 # optionally followed by file paths: `npm run test -- src/x.test.ts`. Paths only: no flags and no
 # `=`, so nothing like `--config evil.ts` or `--reporter=./x.js` rides along (those prompt).
-ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-eval "$(CLAUDE_PROJECT_DIR="$ROOT" bash "$SELF_DIR/stack.sh" 2>/dev/null | grep -E '^CMD_(TYPECHECK|LINT|TEST|BUILD)=')"
-for c in "${CMD_TYPECHECK:-}" "${CMD_LINT:-}" "${CMD_TEST:-}" "${CMD_BUILD:-}"; do
+for c in {npm,pnpm,yarn,bun}' run '{typecheck,type-check,types,lint,test,build} 'pnpm test' 'yarn test' 'bun test' \
+         'npx --no-install tsc --noEmit --incremental --tsBuildInfoFile .claude/.cache/tsbuildinfo' 'npx --no-install vitest run' 'npx --no-install next build'; do
   [ -n "$c" ] || continue
   [ "$CMD" = "$c" ] && allow "verify command"
   if [[ "$CMD" == "$c "* ]]; then

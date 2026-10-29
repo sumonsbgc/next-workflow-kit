@@ -18,8 +18,13 @@ block() { echo "Blocked by next-workflow: $1" >&2; exit 2; }
 # A heredoc fed to anything but a shell is data (a task for `tasks.sh new`, a script for python,
 # a file for cat), not commands: drop its body. Fed to a bare shell (`bash <<EOF`) it runs, so it stays.
 FIRST="${CMD%%$'\n'*}"
-if [[ "$FIRST" =~ \<\<-?[[:space:]]*[\"\']?([A-Za-z_][A-Za-z0-9_]*) ]] && [[ "$FIRST" != *'<<<'* ]]; then
-  TAG="${BASH_REMATCH[1]}"
+HEREDOCS="${FIRST//[^<]/ }"; HEREDOCS="$(printf '%s' "$HEREDOCS" | grep -o '<<' | wc -l | tr -d ' ')"
+if [ "$HEREDOCS" = 1 ] && [[ "$FIRST" != *'<<<'* ]] && [[ "$FIRST" =~ \<\<(-?)[[:space:]]*([^[:space:]\;\&\|\<\>\(\)]+) ]]; then
+  DASH="${BASH_REMATCH[1]}"
+  TAG="$(printf '%s' "${BASH_REMATCH[2]}" | tr -d "\"'\\\\")"
+  [[ "$TAG" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || TAG=""
+fi
+if [ -n "${TAG:-}" ]; then
   read -ra F <<<"${FIRST%%<<*}"
   k=0; while [ "$k" -lt "${#F[@]}" ] && [[ "${F[$k]}" == *=* ]]; do k=$((k + 1)); done
   RUNS=0
@@ -27,8 +32,11 @@ if [[ "$FIRST" =~ \<\<-?[[:space:]]*[\"\']?([A-Za-z_][A-Za-z0-9_]*) ]] && [[ "$F
     RUNS=1; for x in "${F[@]:$((k + 1))}"; do [[ "$x" == -* ]] || { RUNS=0; break; }; done   # `bash script.sh <<X` feeds data
   fi
   if [ "$RUNS" = 0 ]; then
-    REST="$(printf '%s\n' "$CMD" | awk -v t="$TAG" 'NR > 1 && !past { if ($0 ~ "^[[:space:]]*" t "[[:space:]]*$") past = 1; next } NR > 1 { print }')"
-    CMD="$FIRST"${REST:+$'\n'"$REST"}
+    TERMINATED="$(printf '%s\n' "$CMD" | awk -v t="$TAG" -v dash="$DASH" 'NR > 1 { l = $0; if (dash == "-") sub(/^\t+/, "", l); if (l == t) { print "yes"; exit } }')"
+    if [ "$TERMINATED" = yes ]; then
+      REST="$(printf '%s\n' "$CMD" | awk -v t="$TAG" -v dash="$DASH" 'NR > 1 && !past { l = $0; if (dash == "-") sub(/^\t+/, "", l); if (l == t) past = 1; next } NR > 1 { print }')"
+      CMD="$FIRST"${REST:+$'\n'"$REST"}
+    fi
   fi
 fi
 

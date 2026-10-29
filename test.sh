@@ -1109,6 +1109,12 @@ bash "$KIT/install.sh" "$IG" --stage-branch develop >/dev/null 2>&1
 assert_contains "install.sh --stage-branch records the stage branch" "$(cat "$IG/.claude/workflow.conf" 2>/dev/null)" "STAGE_BRANCH=develop"
 mkdir -p "$IG/app"
 assert_contains "the session report names the stage branch" "$(CLAUDE_PROJECT_DIR="$IG" bash "$H/session-context.sh")" "stage branch \`develop\`"
+assert_eq "a mixed-quote heredoc delimiter can't hide a push" "$(own "$(printf 'cat <<"E"OF > f\nx\nEOF\ngit push')")" "2"
+assert_eq "a heredoc with no terminator is scanned whole" "$(own "$(printf 'cat <<EOF > f\nx\ngit push')")" "2"
+assert_eq "a quoted-delimiter task draft still passes" "$(own "$(printf "bash .claude/hooks/tasks.sh new 005-x <<'TASK'\ngit push\nTASK")")" "0"
+mkdir -p "$IG/.claude/.cache"; printf 'CMD_TEST="rm -rf x"\n' > "$IG/.claude/.cache/stack.env"
+assert_eq "allow-helpers ignores a tampered stack cache" "$(printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf x"}}' | CLAUDE_PROJECT_DIR="$IG" bash "$H/allow-helpers.sh" | grep -c allow)" "0"
+assert_eq "allow-helpers still approves a known verify command" "$(printf '{"tool_name":"Bash","tool_input":{"command":"npm run test"}}' | CLAUDE_PROJECT_DIR="$IG" bash "$H/allow-helpers.sh" | grep -c allow)" "1"
 
 printf '\n\033[1m%d passed, %d failed\033[0m\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]

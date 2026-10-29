@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.6.1 — 2026-10-30
+Fixes from automated security review.
+- guard-owner reads a heredoc delimiter the way bash does: the whole word with its quotes removed (`<<"E"OF` is `EOF`), ended only by an exact terminator line (leading tabs only for `<<-`). With more than one heredoc, an odd delimiter, or no terminator, the whole command is scanned. Before, `cat <<"E"OF … EOF` followed by `git push` hid the push.
+- allow-helpers no longer builds its auto-approve list from the stack cache, which a shell command could rewrite. It approves only the fixed verify commands the kit can detect (`<pm> run typecheck|type-check|types|lint|test|build`, `npx --no-install tsc …`, `npx --no-install vitest run`, `npx --no-install next build`), optionally followed by plain paths.
+
 ## 2.6.0 — 2026-10-30
 **No comments — pure code.** Code written for a task carries no comments.
 - New PreToolUse(Edit|Write|MultiEdit) hook `guard-comments.sh` blocks an edit that adds a `//`, `/* */`, JSDoc prose, `{/* */}` or `<!-- -->` line to TS/JS, CSS, Vue/HTML or shell files, before the file is written, and names the lines. Only comments the edit adds count: ones already in the file (or in `old_string`) are left alone. Allowed: `'use client'`/`'use server'`, shebangs, tooling directives (`@ts-expect-error`, `eslint-disable-next-line`, `prettier-ignore`) and type-only JSDoc tags. `node_modules/`, `.next/`, `dist/`, `build/`, `out/`, `coverage/`, `next-env.d.ts` and `.claude/` are skipped. `NEXT_WF_COMMENT_GUARD=off` turns it off. It always runs in a plugin install. Works without jq (Node fallback).
